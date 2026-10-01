@@ -17,7 +17,7 @@ That's it. No accounts, no network, no settings window.
 Requires macOS 14+ on Apple silicon and the Xcode Command Line Tools (`xcode-select --install`).
 
 ```bash
-git clone https://github.com/melindaGh/dial.git
+git clone https://github.com/eroyun/dial.git
 cd dial
 ./scripts/build-app.sh
 open build/Dial.app

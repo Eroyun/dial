@@ -7,7 +7,7 @@
 	<key>CFBundleDisplayName</key>
 	<string>Dial</string>
 	<key>CFBundleIdentifier</key>
-	<string>io.github.melindagh.dial</string>
+	<string>io.github.eroyun.dial</string>
 	<key>CFBundleExecutable</key>
 	<string>Dial</string>
 	<key>CFBundlePackageType</key>
