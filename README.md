@@ -60,13 +60,10 @@ You only do this once.
 
 ## Turning on keys and touch control
 
-Brightness, volume and screen size work right away. The keyboard keys and the touch switch need one permission:
+Brightness, volume and screen size work right away. The first time you turn touch off (or turn on keyboard keys from the **⋯** menu), Dial opens System Settings for you:
 
-1. In the Dial panel, click **Open Settings**.
-2. Turn on the switch next to **Dial**.
-3. Come back — Dial notices by itself.
-
-**Dial is on in the list, but the panel still asks?** This happens after an update. Select **Dial** in that list, click the **−** button, then click **Open Settings** in Dial again and turn it on.
+1. Turn on the switch next to **Dial**.
+2. That's it. Dial notices by itself and finishes what you asked.
 
 ## Questions
 
