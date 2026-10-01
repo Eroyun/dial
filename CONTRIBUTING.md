@@ -12,7 +12,7 @@ swift build                    # debug build
 
 Only the Xcode Command Line Tools are required. SwiftUI's `@State` macro is not available without full Xcode, so app state lives in `@Observable` classes held by plain `let`s.
 
-Rebuilt apps are ad-hoc signed, so macOS treats each build as a new app: switch Dial off and on again in Accessibility after rebuilding.
+Without a certificate, rebuilt apps are signed ad hoc and macOS treats each build as a new app, so Dial's Accessibility switch has to be turned on again after every rebuild. To avoid that, make a self-signed code-signing certificate named **Dial Developer** in your login keychain (Keychain Access → Certificate Assistant → Create a Certificate…, type *Code Signing*). `build-app.sh` uses it automatically, and the permission then survives rebuilds.
 
 ## Pull requests
 

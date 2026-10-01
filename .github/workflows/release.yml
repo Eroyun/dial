@@ -12,6 +12,21 @@ jobs:
     runs-on: macos-26
     steps:
       - uses: actions/checkout@v4
+      # Signing every release with the same certificate lets users keep Dial's Accessibility
+      # permission across updates. Without the secrets the release is signed ad hoc.
+      - name: Import signing certificate
+        env:
+          P12: ${{ secrets.DIAL_SIGNING_P12 }}
+          P12_PASSWORD: ${{ secrets.DIAL_SIGNING_PASSWORD }}
+        run: |
+          if [ -z "$P12" ]; then echo "No certificate; signing ad hoc"; exit 0; fi
+          echo "$P12" | base64 --decode > dial.p12
+          security create-keychain -p ci build.keychain
+          security unlock-keychain -p ci build.keychain
+          security import dial.p12 -k build.keychain -P "$P12_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple: -s -k ci build.keychain >/dev/null
+          security list-keychains -d user -s build.keychain login.keychain
+          rm dial.p12
       - name: Build Dial.app
         run: ./scripts/build-app.sh --dmg
       - name: Publish release

@@ -172,59 +172,64 @@ private struct ModeRow: View {
     private var open: Bool { display.showingSizes }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack(spacing: 6) {
-                Button { withAnimation(.snappy(duration: 0.2)) {
-                    // One list open at a time keeps the panel shorter than the screen.
-                    let open = !display.showingSizes
-                    all.forEach { $0.showingSizes = false }
-                    display.showingSizes = open
-                } } label: {
-                    HStack(spacing: 6) {
-                        Text(display.current.map { "Looks like \($0.sizeLabel)" } ?? "–")
-                            .font(.system(size: 11, weight: .semibold, design: .rounded))
-                            .monospacedDigit()
-                            .fixedSize()
-                        Spacer(minLength: 0)
-                        Image(systemName: "chevron.down")
-                            .font(.system(size: 8, weight: .bold))
-                            .foregroundStyle(.tertiary)
-                            .rotationEffect(.degrees(open ? 180 : 0))
-                    }
-                    .padding(.horizontal, 10)
-                    .frame(height: 24)
-                    .background(.primary.opacity(0.07), in: Capsule())
-                    .contentShape(Capsule())
+        HStack(spacing: 6) {
+            Button {
+                guard Date().timeIntervalSince(display.sizesClosedAt) > 0.3 else { return }
+                let open = !display.showingSizes
+                all.forEach { $0.showingSizes = false }
+                display.showingSizes = open
+            } label: {
+                HStack(spacing: 6) {
+                    Text(display.current.map { "Looks like \($0.sizeLabel)" } ?? "–")
+                        .font(.system(size: 11, weight: .semibold, design: .rounded))
+                        .monospacedDigit()
+                        .fixedSize()
+                    Spacer(minLength: 0)
+                    Image(systemName: "chevron.down")
+                        .font(.system(size: 8, weight: .bold))
+                        .foregroundStyle(.tertiary)
+                        .rotationEffect(.degrees(open ? 180 : 0))
                 }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Screen size")
-                .accessibilityValue(display.current?.sizeLabel ?? "")
-                Menu {
-                    ForEach(display.refreshRates) { mode in
-                        Button { display.select(refresh: mode) } label: {
-                            if mode.hz == display.current?.hz { Label("\(mode.hz) Hz", systemImage: "checkmark") } else { Text("\(mode.hz) Hz") }
-                        }
-                    }
-                } label: {
-                    Pill(text: display.current.map { "\($0.hz) Hz" } ?? "–")
-                }
-                .menuStyle(.button).buttonStyle(.plain).menuIndicator(.hidden)
-                .fixedSize()
-                .disabled(display.refreshRates.count < 2)
+                .padding(.horizontal, 10)
+                .frame(height: 24)
+                .background(.primary.opacity(0.07), in: Capsule())
+                .contentShape(Capsule())
             }
-            if open { SizeList(display: display).transition(.opacity) }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Screen size")
+            .accessibilityValue(display.current?.sizeLabel ?? "")
+            // A popover, not an inline list: the panel keeps its height, and clicking
+            // anywhere else or pressing Esc closes it.
+            .background(Dropdown(isPresented: display.showingSizes, onClose: {
+                display.showingSizes = false
+                display.sizesClosedAt = Date()
+            }) {
+                SizeList(display: display)
+            })
+            Menu {
+                ForEach(display.refreshRates) { mode in
+                    Button { display.select(refresh: mode) } label: {
+                        if mode.hz == display.current?.hz { Label("\(mode.hz) Hz", systemImage: "checkmark") } else { Text("\(mode.hz) Hz") }
+                    }
+                }
+            } label: {
+                Pill(text: display.current.map { "\($0.hz) Hz" } ?? "–")
+            }
+            .menuStyle(.button).buttonStyle(.plain).menuIndicator(.hidden)
+            .fixedSize()
+            .disabled(display.refreshRates.count < 2)
         }
     }
 }
 
-/// Every size the screen offers, in a box that scrolls instead of growing.
+/// Every size the screen offers, in a popover that scrolls when the list is long.
 private struct SizeList: View {
     let display: ExternalDisplay
 
-    /// About eight rows, less on short screens so the panel never runs off the screen.
-    static var height: CGFloat {
+    /// Fits the whole list when it is short, about twelve rows otherwise.
+    private var height: CGFloat {
         let screen = NSScreen.main?.visibleFrame.height ?? 800
-        return min(236, max(120, screen - 560))
+        return min(CGFloat(display.resolutions.count) * 29 + 6, 354, screen - 200)
     }
 
     var body: some View {
@@ -233,7 +238,10 @@ private struct SizeList: View {
                 VStack(spacing: 1) {
                     ForEach(display.resolutions) { mode in
                         let chosen = mode.sizeLabel == display.current?.sizeLabel
-                        Button { display.select(size: mode) } label: {
+                        Button {
+                            display.select(size: mode)
+                            display.showingSizes = false
+                        } label: {
                             HStack(spacing: 6) {
                                 Image(systemName: "checkmark")
                                     .font(.system(size: 9, weight: .bold))
@@ -256,8 +264,7 @@ private struct SizeList: View {
                 }
                 .padding(3)
             }
-            .frame(height: Self.height)
-            .background(.primary.opacity(0.04), in: RoundedRectangle(cornerRadius: 9))
+            .frame(width: 220, height: height)
             .onAppear { proxy.scrollTo(display.current?.sizeLabel, anchor: .center) }
         }
     }

@@ -25,40 +25,45 @@ final class Access {
         if granted { action() } else { waiters.append(action) }
     }
 
-    /// Opens the Accessibility list in System Settings, where the user turns Dial on.
+    /// Asks macOS to add Dial to the Accessibility list; its prompt has the button to open Settings.
+    /// Asking again opens Settings directly, in case that prompt was dismissed.
     func ask() {
+        if asked {
+            NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")!)
+            return
+        }
         asked = true
-        // An entry left by an older Dial build stays switched on in Settings but no longer applies
-        // to this copy. Clear it once per build, never again: clearing on every ask removed the
-        // entry the user had just turned on.
-        let build = Self.signature()
-        if UserDefaults.standard.string(forKey: "accessClearedFor") != build {
+        // An entry left by a copy signed differently stays switched on in Settings but no longer
+        // applies to this copy. Clear it once per signature, never again: clearing on every ask
+        // removed the entry the user had just turned on.
+        let signature = Self.signature()
+        if UserDefaults.standard.string(forKey: "accessClearedFor") != signature {
             let reset = Process()
             reset.executableURL = URL(fileURLWithPath: "/usr/bin/tccutil")
             reset.arguments = ["reset", "Accessibility", Bundle.main.bundleIdentifier ?? "io.github.eroyun.dial"]
             try? reset.run()
             reset.waitUntilExit()
-            UserDefaults.standard.set(build, forKey: "accessClearedFor")
+            UserDefaults.standard.set(signature, forKey: "accessClearedFor")
             log("cleared old accessibility entry (exit \(reset.terminationStatus))")
         }
-        // Adds Dial to the list so the user only has to flip its switch.
         AXIsProcessTrustedWithOptions([kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary)
-        NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")!)
         log("asked for accessibility")
         watch()
     }
 
-    /// The code signature hash macOS ties the permission to; it changes with every build.
+    /// What macOS checks the permission against. A build signed with a certificate keeps the same
+    /// requirement from build to build; an unsigned (ad hoc) build gets a new one every time.
     private static func signature() -> String {
         var code: SecCode?
         var staticCode: SecStaticCode?
-        var info: CFDictionary?
+        var requirement: SecRequirement?
+        var text: CFString?
         guard SecCodeCopySelf([], &code) == errSecSuccess, let code,
               SecCodeCopyStaticCode(code, [], &staticCode) == errSecSuccess, let staticCode,
-              SecCodeCopySigningInformation(staticCode, [], &info) == errSecSuccess,
-              let hash = (info as? [String: Any])?[kSecCodeInfoUnique as String] as? Data
+              SecCodeCopyDesignatedRequirement(staticCode, [], &requirement) == errSecSuccess, let requirement,
+              SecRequirementCopyString(requirement, [], &text) == errSecSuccess, let text
         else { return "unknown" }
-        return hash.map { String(format: "%02x", $0) }.joined()
+        return text as String
     }
 
     private func watch() {

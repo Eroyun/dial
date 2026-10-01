@@ -8,6 +8,8 @@ final class ExternalDisplay: Identifiable {
     var detail: String = ""
     /// Whether the size list is open in the panel.
     var showingSizes = false
+    /// When the size list last closed, so the click that closed it doesn't reopen it.
+    @ObservationIgnored var sizesClosedAt = Date.distantPast
     /// 0...1, nil until read (or unsupported).
     var brightness: Double?
     var volume: Double?
