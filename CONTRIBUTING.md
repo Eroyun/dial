@@ -7,7 +7,7 @@ Dial stays small on purpose: brightness, volume, resolution and touch for extern
 ```bash
 swift build                    # debug build
 .build/debug/Dial --probe      # what Dial sees on your machine
-./scripts/build-app.sh         # build/Dial.app
+./scripts/build-app.sh --install   # build and install to /Applications
 ```
 
 Only the Xcode Command Line Tools are required. SwiftUI's `@State` macro is not available without full Xcode, so app state lives in `@Observable` classes held by plain `let`s.

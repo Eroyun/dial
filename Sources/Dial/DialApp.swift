@@ -18,6 +18,7 @@ struct DialApp: App {
         }
         self.displays = displays
         self.keys = KeyRouter(store: displays)
+        Install.check()
     }
 
     var body: some Scene {

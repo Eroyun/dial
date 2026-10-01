@@ -83,8 +83,8 @@ Click **⋯** in the panel and choose **Launch at login**.
 
 ```bash
 git clone https://github.com/Eroyun/dial.git && cd dial
-./scripts/build-app.sh          # builds build/Dial.app (needs Xcode Command Line Tools)
-build/Dial.app/Contents/MacOS/Dial --probe   # what Dial sees, for bug reports
+./scripts/build-app.sh --install   # builds Dial and puts it in Applications (needs Xcode Command Line Tools)
+/Applications/Dial.app/Contents/MacOS/Dial --probe   # what Dial sees, for bug reports
 ```
 
 How it works:

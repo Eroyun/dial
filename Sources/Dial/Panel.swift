@@ -12,7 +12,7 @@ struct Panel: View {
             if displays.displays.isEmpty {
                 empty
             } else {
-                ForEach(displays.displays) { DisplayCard(display: $0) }
+                ForEach(displays.displays) { DisplayCard(display: $0, all: displays.displays) }
             }
             if touch.available { TouchCard(touch: touch) }
         }
@@ -73,6 +73,7 @@ struct Panel: View {
 
 private struct DisplayCard: View {
     let display: ExternalDisplay
+    let all: [ExternalDisplay]
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -91,7 +92,7 @@ private struct DisplayCard: View {
                         .monospacedDigit()
                 }
             }
-            if !display.modes.isEmpty { ModeRow(display: display) }
+            if !display.modes.isEmpty { ModeRow(display: display, all: all) }
             if let brightness = display.brightness {
                 DialSlider(value: brightness, symbol: "sun.max.fill") { display.setBrightness($0) }
             }
@@ -139,12 +140,18 @@ private struct TouchCard: View {
 /// "Looks like" size, tap to open a short scrolling list of sizes; refresh rate as a small pill.
 private struct ModeRow: View {
     let display: ExternalDisplay
+    let all: [ExternalDisplay]
     private var open: Bool { display.showingSizes }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 6) {
-                Button { withAnimation(.snappy(duration: 0.2)) { display.showingSizes.toggle() } } label: {
+                Button { withAnimation(.snappy(duration: 0.2)) {
+                    // One list open at a time keeps the panel shorter than the screen.
+                    let open = !display.showingSizes
+                    all.forEach { $0.showingSizes = false }
+                    display.showingSizes = open
+                } } label: {
                     HStack(spacing: 6) {
                         Text(display.current.map { "Looks like \($0.sizeLabel)" } ?? "–")
                             .font(.system(size: 11, weight: .semibold, design: .rounded))
@@ -186,6 +193,12 @@ private struct ModeRow: View {
 private struct SizeList: View {
     let display: ExternalDisplay
 
+    /// About eight rows, less on short screens so the panel never runs off the screen.
+    static var height: CGFloat {
+        let screen = NSScreen.main?.visibleFrame.height ?? 800
+        return min(236, max(120, screen - 560))
+    }
+
     var body: some View {
         ScrollViewReader { proxy in
             ScrollView {
@@ -199,13 +212,13 @@ private struct SizeList: View {
                                     .opacity(chosen ? 1 : 0)
                                     .frame(width: 12)
                                 Text(mode.sizeLabel)
-                                    .font(.system(size: 11.5, weight: chosen ? .semibold : .regular, design: .rounded))
+                                    .font(.system(size: 12.5, weight: chosen ? .semibold : .regular, design: .rounded))
                                     .monospacedDigit()
                                 Spacer(minLength: 0)
                                 if mode.sizeLabel == display.nativeSize { Tag(text: "Native") }
                             }
                             .padding(.horizontal, 8)
-                            .frame(height: 24)
+                            .frame(height: 28)
                             .background(chosen ? AnyShapeStyle(.primary.opacity(0.08)) : AnyShapeStyle(.clear), in: RoundedRectangle(cornerRadius: 6))
                             .contentShape(Rectangle())
                         }
@@ -215,7 +228,7 @@ private struct SizeList: View {
                 }
                 .padding(3)
             }
-            .frame(height: 130)
+            .frame(height: Self.height)
             .background(.primary.opacity(0.04), in: RoundedRectangle(cornerRadius: 9))
             .onAppear { proxy.scrollTo(display.current?.sizeLabel, anchor: .center) }
         }

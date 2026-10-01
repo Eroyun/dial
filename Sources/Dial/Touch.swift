@@ -12,7 +12,8 @@ import Observation
 @Observable
 final class TouchController {
     private(set) var deviceName: String?
-    private(set) var enabled = true
+    /// Remembered across replugs and restarts.
+    private(set) var enabled = !UserDefaults.standard.bool(forKey: "touchOff")
     /// Touch was switched off but Dial is still waiting for Accessibility.
     private(set) var waitingForPermission = false
     var available: Bool { deviceName != nil }
@@ -21,6 +22,7 @@ final class TouchController {
     @ObservationIgnored private var seized: [IOHIDDevice] = []
     @ObservationIgnored private var senders = Set<Int64>()
     @ObservationIgnored private var tap: CFMachPort?
+    @ObservationIgnored private var retries = 0
 
     init() {
         IOHIDManagerSetDeviceMatching(manager, nil)
@@ -49,6 +51,8 @@ final class TouchController {
         }
         waitingForPermission = false
         enabled = on
+        UserDefaults.standard.set(!on, forKey: "touchOff")
+        retries = 0
         apply()
     }
 
@@ -58,10 +62,13 @@ final class TouchController {
             self.deviceName = screens.first.map { Self.string($0, kIOHIDProductKey) ?? "Touch screen" }
             if screens.isEmpty {
                 self.release()
-                self.enabled = true
-                self.waitingForPermission = false
             } else if !self.enabled {
-                self.apply() // re-grab after the panel re-enumerates (cable replug, monitor sleep)
+                // Re-grab after the panel re-enumerates (cable replug, monitor sleep, Dial launch).
+                self.retries = 0
+                Access.shared.whenGranted { [weak self] in
+                    guard let self, !self.enabled else { return }
+                    self.apply()
+                }
             }
         }
     }
@@ -76,6 +83,14 @@ final class TouchController {
         }
         senders = senderIDs()
         startFilter()
+        // Right after a replug the panel's event services may not be registered yet; try again shortly.
+        if senders.isEmpty && retries < 5 && !touchScreens().isEmpty {
+            retries += 1
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1) { [weak self] in
+                guard let self, !self.enabled else { return }
+                self.apply()
+            }
+        }
         log("touch off: blocking \(senders.map { "0x" + String($0, radix: 16) }), filter \(tap != nil ? "running" : "FAILED")")
     }
 

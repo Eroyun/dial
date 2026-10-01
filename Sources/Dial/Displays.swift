@@ -64,9 +64,35 @@ final class ExternalDisplay: Identifiable {
         let hz = current?.hz ?? 0
         let candidates = modes.filter { $0.sizeKey == size.sizeKey }
         apply(candidates.first { $0.hz == hz } ?? candidates.max { $0.hz < $1.hz } ?? size)
+        remember()
     }
 
-    func select(refresh: DisplayMode) { apply(refresh) }
+    func select(refresh: DisplayMode) {
+        apply(refresh)
+        remember()
+    }
+
+    // MARK: Remembered choice
+    // macOS sometimes picks a different size or refresh rate when a monitor reconnects or the Mac
+    // wakes. The size and rate chosen in Dial are kept per monitor and put back when it returns.
+
+    private var memoryKey: String {
+        "mode-\(CGDisplayVendorNumber(id))-\(CGDisplayModelNumber(id))-\(CGDisplaySerialNumber(id))"
+    }
+
+    private func remember() {
+        guard let current else { return }
+        UserDefaults.standard.set("\(current.sizeKey)@\(current.hz)", forKey: memoryKey)
+    }
+
+    func restore() {
+        guard let saved = UserDefaults.standard.string(forKey: memoryKey),
+              let current, saved != "\(current.sizeKey)@\(current.hz)",
+              let mode = modes.first(where: { "\($0.sizeKey)@\($0.hz)" == saved })
+        else { return }
+        log("restoring \(saved) on \(name) (was \(current.sizeKey)@\(current.hz))")
+        apply(mode)
+    }
 
     private func apply(_ mode: DisplayMode) {
         var config: CGDisplayConfigRef?
@@ -78,20 +104,33 @@ final class ExternalDisplay: Identifiable {
         refreshDetail()
     }
 
-    func load() {
+    /// Reads brightness and volume. Right after a hotplug or wake the monitor often doesn't answer
+    /// yet, so a missing reply is asked again a few times.
+    func load(attempt: Int = 0) {
         ddc?.read(.brightness) { reply in
             DispatchQueue.main.async {
-                guard let reply else { return }
+                guard let reply else { return self.retryLoad(after: attempt) }
                 self.maxBrightness = reply.max
                 self.brightness = Double(reply.current) / Double(reply.max)
             }
         }
         ddc?.read(.volume) { reply in
             DispatchQueue.main.async {
-                guard let reply else { return }
+                guard let reply else { return self.retryLoad(after: attempt) }
                 self.maxVolume = reply.max
                 self.volume = Double(reply.current) / Double(reply.max)
             }
+        }
+    }
+
+    @ObservationIgnored private var retryScheduled = false
+
+    private func retryLoad(after attempt: Int) {
+        guard attempt < 4, !retryScheduled else { return }
+        retryScheduled = true
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+            self.retryScheduled = false
+            if self.brightness == nil || self.volume == nil { self.load(attempt: attempt + 1) }
         }
     }
 
@@ -152,7 +191,9 @@ final class DisplayStore {
         let services = AVServiceLocator.externalServices()
         var next: [ExternalDisplay] = []
         for id in external {
-            if let existing = displays.first(where: { $0.id == id }) {
+            // Keep a display that answers DDC; rebuild one that doesn't, since its channel may have
+            // changed while the monitor reconnected.
+            if let existing = displays.first(where: { $0.id == id }), existing.brightness != nil || existing.volume != nil {
                 existing.refreshDetail()
                 next.append(existing)
                 continue
@@ -160,6 +201,7 @@ final class DisplayStore {
             let service = AVServiceLocator.match(for: id, in: services)
             let display = ExternalDisplay(id: id, name: Self.name(of: id) ?? service?.name ?? "Display", ddc: service?.ddc)
             display.load()
+            display.restore()
             next.append(display)
         }
         displays = next.sorted { CGDisplayBounds($0.id).minX < CGDisplayBounds($1.id).minX }
