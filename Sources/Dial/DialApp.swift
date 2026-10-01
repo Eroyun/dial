@@ -15,17 +15,17 @@ struct DialApp: App {
         NSApplication.shared.setActivationPolicy(.accessory)
         let displays = DisplayStore()
         if let i = CommandLine.arguments.firstIndex(of: "--snapshot"), i + 1 < CommandLine.arguments.count {
-            Probe.snapshot(Panel(displays: displays, touch: touch, keys: KeyRouter(store: displays)), to: CommandLine.arguments[i + 1])
+            Probe.snapshot(Panel(displays: displays, touch: touch), to: CommandLine.arguments[i + 1])
         }
         self.displays = displays
         self.keys = KeyRouter(store: displays)
-        self.rightClick = RightClickMenu(touch: touch, keys: keys)
+        self.rightClick = RightClickMenu(touch: touch)
         Install.check()
     }
 
     var body: some Scene {
         MenuBarExtra {
-            Panel(displays: displays, touch: touch, keys: keys)
+            Panel(displays: displays, touch: touch)
         } label: {
             Image(systemName: "dial.medium.fill")
         }

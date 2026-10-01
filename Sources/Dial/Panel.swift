@@ -4,7 +4,6 @@ import SwiftUI
 struct Panel: View {
     let displays: DisplayStore
     let touch: TouchController
-    let keys: KeyRouter
 
     var body: some View {
         VStack(spacing: 10) {
@@ -15,7 +14,7 @@ struct Panel: View {
                 ForEach(displays.displays) { DisplayCard(display: $0, all: displays.displays) }
             }
             if touch.available { TouchCard(touch: touch) }
-            OptionsCard(keys: keys)
+            if !Access.shared.granted { KeysSetupCard() }
         }
         .padding(14)
         .frame(width: 300)
@@ -100,49 +99,30 @@ private struct DisplayCard: View {
     }
 }
 
-/// The settings that matter, in plain sight instead of behind a menu.
-private struct OptionsCard: View {
-    let keys: KeyRouter
-    private let login = LoginItem.shared
-
-    var body: some View {
-        VStack(spacing: 12) {
-            OptionRow(symbol: "keyboard", title: "Keyboard keys", status: keysStatus, isOn: keys.active) { on in
-                keys.wanted = on
-                if on && !Access.shared.granted { Access.shared.ask() }
-            }
-            OptionRow(symbol: "power.circle", title: "Open at login", status: "Starts Dial when your Mac starts", isOn: login.enabled) { login.set($0) }
-        }
-        .padding(12)
-        .card()
-    }
-
-    private var keysStatus: String {
-        if keys.wanted && !Access.shared.granted && Access.shared.asked { return "Turn on Dial in Settings to finish" }
-        return "Brightness and volume keys work on monitors"
-    }
-}
-
-private struct OptionRow: View {
-    let symbol: String
-    let title: String
-    let status: String
-    let isOn: Bool
-    let onChange: (Bool) -> Void
+/// Keyboard keys need one permission. Until it is given, this card offers the setup;
+/// afterwards the keys just work and the card goes away.
+private struct KeysSetupCard: View {
+    private let access = Access.shared
 
     var body: some View {
         HStack(spacing: 10) {
-            Image(systemName: symbol)
+            Image(systemName: "keyboard")
                 .font(.system(size: 13))
                 .foregroundStyle(.secondary)
                 .frame(width: 20)
             VStack(alignment: .leading, spacing: 1) {
-                Text(title).font(.system(size: 12, weight: .semibold))
-                Text(status).font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(2)
+                Text("Keyboard keys").font(.system(size: 12, weight: .semibold))
+                Text(access.asked ? "Turn on Dial in Settings to finish" : "Use your Mac's brightness and volume keys on monitors")
+                    .font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
             }
             Spacer(minLength: 8)
-            DialSwitch(isOn: isOn, label: title, onChange: onChange)
+            Button(access.asked ? "Open" : "Set Up") { access.ask() }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.small)
         }
+        .padding(12)
+        .card()
     }
 }
 

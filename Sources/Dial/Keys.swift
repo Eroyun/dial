@@ -8,12 +8,6 @@ import Observation
 @Observable
 final class KeyRouter {
     private(set) var active = false
-    var wanted: Bool {
-        didSet {
-            UserDefaults.standard.set(wanted, forKey: "keys")
-            wanted ? start() : stop()
-        }
-    }
 
     @ObservationIgnored private let store: DisplayStore
     @ObservationIgnored private var tap: CFMachPort?
@@ -21,14 +15,13 @@ final class KeyRouter {
 
     init(store: DisplayStore) {
         self.store = store
-        self.wanted = UserDefaults.standard.object(forKey: "keys") as? Bool ?? true
-        if wanted { start() }
+        start()
     }
 
     private func start() {
         guard tap == nil else { return }
         guard Access.shared.granted else {
-            Access.shared.whenGranted { [weak self] in if self?.wanted == true { self?.start() } }
+            Access.shared.whenGranted { [weak self] in self?.start() }
             return
         }
         let mask = CGEventMask(1 << 14) | CGEventMask(1 << CGEventType.keyDown.rawValue) // 14 = NX_SYSDEFINED
@@ -46,12 +39,6 @@ final class KeyRouter {
         CFRunLoopAddSource(CFRunLoopGetMain(), source, .commonModes)
         CGEvent.tapEnable(tap: tap, enable: true)
         active = true
-    }
-
-    private func stop() {
-        if let tap { CGEvent.tapEnable(tap: tap, enable: false); CFMachPortInvalidate(tap) }
-        tap = nil
-        active = false
     }
 
     private enum Key { case brightnessUp, brightnessDown, volumeUp, volumeDown, mute }

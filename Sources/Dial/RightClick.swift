@@ -5,12 +5,10 @@ import AppKit
 /// right-clicks that land on its own status bar window.
 final class RightClickMenu {
     private let touch: TouchController
-    private let keys: KeyRouter
     private var monitor: Any?
 
-    init(touch: TouchController, keys: KeyRouter) {
+    init(touch: TouchController) {
         self.touch = touch
-        self.keys = keys
         monitor = NSEvent.addLocalMonitorForEvents(matching: .rightMouseDown) { [weak self] event in
             guard let self, let window = event.window, window.className.contains("NSStatusBarWindow"),
                   let view = window.contentView else { return event }
@@ -24,15 +22,11 @@ final class RightClickMenu {
         if touch.available {
             menu.addItem(Item("Touch Screen", on: touch.enabled) { [touch] in touch.setEnabled(!touch.enabled) })
         }
-        menu.addItem(Item("Keyboard Keys", on: keys.active) { [keys] in
-            keys.wanted = !keys.active
-            if keys.wanted && !Access.shared.granted { Access.shared.ask() }
-        })
+        if !Access.shared.granted {
+            menu.addItem(Item("Set Up Keyboard Keys…") { Access.shared.ask() })
+        }
         menu.addItem(Item("Open at Login", on: LoginItem.shared.enabled) { LoginItem.shared.set(!LoginItem.shared.enabled) })
         menu.addItem(.separator())
-        menu.addItem(Item("Show Log") {
-            NSWorkspace.shared.open(FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Logs/Dial.log"))
-        })
         let quit = Item("Quit Dial") { NSApp.terminate(nil) }
         quit.keyEquivalent = "q"
         menu.addItem(quit)
