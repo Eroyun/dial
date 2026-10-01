@@ -19,19 +19,21 @@ struct Dropdown<Content: View>: NSViewRepresentable {
             popover.animates = false
             let host = NSHostingController(rootView: content())
             popover.contentViewController = host
-            popover.contentSize = host.view.fittingSize
             popover.delegate = coordinator
             // Not public API, so only used where it exists; without it the arrow simply stays.
             if popover.responds(to: Selector(("setShouldHideAnchor:"))) {
                 popover.setValue(true, forKey: "shouldHideAnchor")
             }
             coordinator.popover = popover
-            // NSPopover centres itself on the rect it is shown from; a rect as wide as the popover,
-            // starting at the view's left edge, lines the two left edges up like a dropdown.
+            // NSPopover centres itself on the rect it is shown from. Show it, measure how far its
+            // content starts from the view's left edge, and move it by that much so the two line up.
             DispatchQueue.main.async {
-                let width = max(popover.contentSize.width, view.bounds.width)
-                let rect = NSRect(x: 0, y: view.bounds.minY, width: width, height: view.bounds.height)
-                popover.show(relativeTo: rect, of: view, preferredEdge: .minY)
+                popover.show(relativeTo: view.bounds, of: view, preferredEdge: .minY)
+                guard let viewWindow = view.window, let content = popover.contentViewController?.view,
+                      let contentWindow = content.window else { return }
+                let viewLeft = viewWindow.convertToScreen(view.convert(view.bounds, to: nil)).minX
+                let contentLeft = contentWindow.convertToScreen(content.convert(content.bounds, to: nil)).minX
+                popover.positioningRect = view.bounds.offsetBy(dx: viewLeft - contentLeft, dy: 0)
             }
         } else if !isPresented, let popover = coordinator.popover {
             coordinator.popover = nil

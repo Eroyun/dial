@@ -14,6 +14,8 @@ final class ExternalDisplay: Identifiable {
     var brightness: Double?
     var volume: Double?
     var supportsDDC: Bool { ddc != nil }
+    /// The screen has a control channel but never answered on it (some adapters and docks block it).
+    private(set) var unanswered = false
     private(set) var modes: [DisplayMode] = []
     private(set) var current: DisplayMode?
 
@@ -109,6 +111,16 @@ final class ExternalDisplay: Identifiable {
     /// Reads brightness and volume. Right after a hotplug or wake the monitor often doesn't answer
     /// yet, so a missing reply is asked again a few times.
     func load(attempt: Int = 0) {
+        if attempt == 0 {
+            unanswered = false
+            // A read on a blocked channel can hang rather than fail, so give up on a clock too.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 12) {
+                if self.brightness == nil && self.volume == nil {
+                    self.unanswered = true
+                    log("\(self.name): no reply to brightness or volume")
+                }
+            }
+        }
         ddc?.read(.brightness) { reply in
             DispatchQueue.main.async {
                 guard let reply else { return self.retryLoad(after: attempt) }

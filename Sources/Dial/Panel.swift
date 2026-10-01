@@ -89,7 +89,7 @@ private struct DisplayCard: View {
                 DialSlider(value: volume, symbol: volume == 0 ? "speaker.slash.fill" : "speaker.wave.3.fill", variable: true) { display.setVolume($0) }
             }
             if display.brightness == nil && display.volume == nil {
-                Text(display.supportsDDC ? "Reading…" : "This screen doesn't allow brightness control")
+                Text(display.supportsDDC && !display.unanswered ? "Reading…" : "This screen doesn't allow brightness control")
                     .font(.system(size: 11))
                     .foregroundStyle(.tertiary)
             }
@@ -265,7 +265,8 @@ private struct SizeList: View {
                 .padding(3)
             }
             .frame(width: 220, height: height)
-            .onAppear { proxy.scrollTo(display.current?.sizeLabel, anchor: .center) }
+            // The popover lays the list out after it appears; scroll once that has happened.
+            .onAppear { DispatchQueue.main.async { proxy.scrollTo(display.current?.sizeLabel, anchor: .center) } }
         }
     }
 }

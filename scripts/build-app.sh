@@ -43,6 +43,8 @@ case "${1:-}" in
     while pgrep -x Dial >/dev/null; do sleep 0.2; done
     rm -rf /Applications/Dial.app
     cp -R "$APP" /Applications/
+    # Unregistering the build copy above can leave Launch Services without any Dial to open.
+    "$LSREGISTER" -f /Applications/Dial.app
     open /Applications/Dial.app
     echo "Installed /Applications/Dial.app"
     ;;
