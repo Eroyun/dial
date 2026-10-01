@@ -17,14 +17,22 @@ struct Dropdown<Content: View>: NSViewRepresentable {
             let popover = NSPopover()
             popover.behavior = .transient
             popover.animates = false
-            popover.contentViewController = NSHostingController(rootView: content())
+            let host = NSHostingController(rootView: content())
+            popover.contentViewController = host
+            popover.contentSize = host.view.fittingSize
             popover.delegate = coordinator
             // Not public API, so only used where it exists; without it the arrow simply stays.
             if popover.responds(to: Selector(("setShouldHideAnchor:"))) {
                 popover.setValue(true, forKey: "shouldHideAnchor")
             }
             coordinator.popover = popover
-            DispatchQueue.main.async { popover.show(relativeTo: view.bounds, of: view, preferredEdge: .minY) }
+            // NSPopover centres itself on the rect it is shown from; a rect as wide as the popover,
+            // starting at the view's left edge, lines the two left edges up like a dropdown.
+            DispatchQueue.main.async {
+                let width = max(popover.contentSize.width, view.bounds.width)
+                let rect = NSRect(x: 0, y: view.bounds.minY, width: width, height: view.bounds.height)
+                popover.show(relativeTo: rect, of: view, preferredEdge: .minY)
+            }
         } else if !isPresented, let popover = coordinator.popover {
             coordinator.popover = nil
             popover.close()
