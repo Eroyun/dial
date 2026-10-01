@@ -15,6 +15,7 @@ struct Panel: View {
                 ForEach(displays.displays) { DisplayCard(display: $0, all: displays.displays) }
             }
             if touch.available { TouchCard(touch: touch) }
+            OptionsCard(keys: keys)
         }
         .padding(14)
         .frame(width: 300)
@@ -28,28 +29,17 @@ struct Panel: View {
             Text("Dial")
                 .font(.system(size: 14, weight: .semibold, design: .rounded))
             Spacer()
-            Menu {
-                if Access.shared.granted {
-                    Toggle("Keyboard brightness & volume", isOn: Binding(get: { keys.wanted }, set: { keys.wanted = $0 }))
-                } else {
-                    Button("Use keyboard brightness & volume…") { keys.wanted = true; Access.shared.ask() }
-                }
-                Toggle("Launch at login", isOn: Binding(
-                    get: { SMAppService.mainApp.status == .enabled },
-                    set: { try? $0 ? SMAppService.mainApp.register() : SMAppService.mainApp.unregister() }
-                ))
-                Divider()
-                Button("Quit Dial") { NSApp.terminate(nil) }.keyboardShortcut("q")
-            } label: {
-                Image(systemName: "ellipsis")
-                    .font(.system(size: 12, weight: .bold))
+            Button { NSApp.terminate(nil) } label: {
+                Image(systemName: "power")
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundStyle(.secondary)
                     .frame(width: 24, height: 24)
                     .contentShape(Circle())
             }
-            .menuStyle(.button)
             .buttonStyle(.plain)
-            .menuIndicator(.hidden)
-            .fixedSize()
+            .keyboardShortcut("q")
+            .help("Quit Dial")
+            .accessibilityLabel("Quit Dial")
         }
         .padding(.horizontal, 4)
         .padding(.bottom, 2)
@@ -107,6 +97,64 @@ private struct DisplayCard: View {
         }
         .padding(12)
         .card()
+    }
+}
+
+/// The settings that matter, in plain sight instead of behind a menu.
+private struct OptionsCard: View {
+    let keys: KeyRouter
+    private let login = LoginItem.shared
+
+    var body: some View {
+        VStack(spacing: 12) {
+            OptionRow(symbol: "keyboard", title: "Keyboard keys", status: keysStatus, isOn: keys.active) { on in
+                keys.wanted = on
+                if on && !Access.shared.granted { Access.shared.ask() }
+            }
+            OptionRow(symbol: "power.circle", title: "Open at login", status: "Starts Dial when your Mac starts", isOn: login.enabled) { login.set($0) }
+        }
+        .padding(12)
+        .card()
+    }
+
+    private var keysStatus: String {
+        if keys.wanted && !Access.shared.granted && Access.shared.asked { return "Turn on Dial in Settings to finish" }
+        return "Brightness and volume keys work on monitors"
+    }
+}
+
+private struct OptionRow: View {
+    let symbol: String
+    let title: String
+    let status: String
+    let isOn: Bool
+    let onChange: (Bool) -> Void
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Image(systemName: symbol)
+                .font(.system(size: 13))
+                .foregroundStyle(.secondary)
+                .frame(width: 20)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(title).font(.system(size: 12, weight: .semibold))
+                Text(status).font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(2)
+            }
+            Spacer(minLength: 8)
+            DialSwitch(isOn: isOn, label: title, onChange: onChange)
+        }
+    }
+}
+
+/// Open-at-login state, observable so the switch updates when it changes.
+@Observable
+final class LoginItem {
+    static let shared = LoginItem()
+    private(set) var enabled = SMAppService.mainApp.status == .enabled
+
+    func set(_ on: Bool) {
+        do { try on ? SMAppService.mainApp.register() : SMAppService.mainApp.unregister() } catch { log("login item: \(error.localizedDescription)") }
+        enabled = SMAppService.mainApp.status == .enabled
     }
 }
 

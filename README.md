@@ -60,7 +60,7 @@ You only do this once.
 
 ## Turning on keys and touch control
 
-Brightness, volume and screen size work right away. The first time you turn touch off (or turn on keyboard keys from the **⋯** menu), Dial opens System Settings for you:
+Brightness, volume and screen size work right away. The first time you turn touch off or turn on **Keyboard keys**, Dial opens System Settings for you:
 
 1. Turn on the switch next to **Dial**.
 2. That's it. Dial notices by itself and finishes what you asked.
@@ -77,7 +77,10 @@ Some monitors, docks and adapters (especially DisplayLink) block the signal Dial
 Dial shows every size macOS offers for your monitor (when a size comes both sharp and blurry, only the sharp one). Adding new sizes needs deeper system changes; [BetterDisplay](https://github.com/waydabber/BetterDisplay) does that.
 
 **How do I make Dial start with my Mac?**
-Click **⋯** in the panel and choose **Launch at login**.
+Turn on **Open at login** in the panel, or right-click the dial icon and choose **Open at Login**.
+
+**Is there a quicker way to flip switches?**
+Right-click the dial icon: touch screen, keyboard keys, open at login, the log and Quit are all there.
 
 ## For developers
 

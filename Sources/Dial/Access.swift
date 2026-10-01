@@ -9,6 +9,8 @@ final class Access {
     static let shared = Access()
 
     private(set) var granted = AXIsProcessTrusted()
+    /// Dial sent the user to Settings this session and is waiting for the switch.
+    private(set) var asked = false
 
     @ObservationIgnored private var waiters: [() -> Void] = []
     @ObservationIgnored private var poll: Timer?
@@ -25,6 +27,7 @@ final class Access {
 
     /// Opens the Accessibility list in System Settings, where the user turns Dial on.
     func ask() {
+        asked = true
         // An entry left by an older Dial build stays switched on in Settings but no longer applies
         // to this copy. Clear it once per build, never again: clearing on every ask removed the
         // entry the user had just turned on.

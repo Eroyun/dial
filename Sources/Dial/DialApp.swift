@@ -7,6 +7,7 @@ struct DialApp: App {
     private let displays: DisplayStore
     private let touch = TouchController()
     private let keys: KeyRouter
+    private let rightClick: RightClickMenu
 
     init() {
         if CommandLine.arguments.contains("--probe") { Probe.run() }
@@ -18,6 +19,7 @@ struct DialApp: App {
         }
         self.displays = displays
         self.keys = KeyRouter(store: displays)
+        self.rightClick = RightClickMenu(touch: touch, keys: keys)
         Install.check()
     }
 
