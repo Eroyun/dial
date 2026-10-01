@@ -45,7 +45,8 @@ case "${1:-}" in
     cp -R "$APP" /Applications/
     # Unregistering the build copy above can leave Launch Services without any Dial to open.
     "$LSREGISTER" -f /Applications/Dial.app
-    open /Applications/Dial.app
+    # Launch Services can take a moment to pick up the new copy (open fails with -600 until then).
+    for _ in 1 2 3 4 5; do open /Applications/Dial.app 2>/dev/null && break; sleep 1; done
     echo "Installed /Applications/Dial.app"
     ;;
 esac

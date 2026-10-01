@@ -37,6 +37,7 @@ struct DialApp: App {
 /// `Dial --set <display> brightness|volume <0-100>` sets a value from scripts.
 enum Probe {
     static func run() -> Never {
+        setvbuf(stdout, nil, _IOLBF, 0) // print each line as it happens, even if a read hangs
         let services = AVServiceLocator.externalServices()
         print("I2C services: \(services.map { "\($0.name) [\($0.vendor):\($0.product)]" })")
         var ids = [CGDirectDisplayID](repeating: 0, count: 16)

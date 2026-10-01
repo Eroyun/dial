@@ -31,7 +31,7 @@
 
 ## What it does
 
-- ☀️ **Brightness** — changes the monitor's real backlight, not a dark overlay.
+- ☀️ **Brightness** — changes the monitor's real backlight. Screens that don't allow that (often behind adapters) get their picture dimmed instead.
 - 🔊 **Volume** — for monitors with speakers.
 - 🔍 **Screen size** — see your screen's real resolution, pick how big everything looks from a short list, and choose the refresh rate.
 - ⌨️ **Keyboard keys** — your Mac's brightness and volume keys work on the monitor too.
@@ -70,8 +70,8 @@ Brightness, volume and screen size work right away. Click **Set Up** on the **Ke
 **Can I use Control Center instead?**
 No. Apple doesn't let apps add external-monitor sliders to Control Center, so Dial lives in the menu bar instead.
 
-**My monitor shows "doesn't allow brightness control".**
-Some monitors, docks and adapters (especially DisplayLink) block the signal Dial uses. Try connecting the monitor straight to the Mac with USB-C or HDMI.
+**Brightness on one monitor only makes the picture darker.**
+That monitor, or the adapter it's on, blocks the signal Dial uses to set the backlight, so Dial dims the picture instead. Connecting it straight to the Mac with USB-C or HDMI often gets real backlight control back.
 
 **I want more screen sizes than the list shows.**
 Dial shows every size macOS offers for your monitor (when a size comes both sharp and blurry, only the sharp one). Adding new sizes needs deeper system changes; [BetterDisplay](https://github.com/waydabber/BetterDisplay) does that.

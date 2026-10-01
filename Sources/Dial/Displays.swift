@@ -16,6 +16,9 @@ final class ExternalDisplay: Identifiable {
     var supportsDDC: Bool { ddc != nil }
     /// The screen has a control channel but never answered on it (some adapters and docks block it).
     private(set) var unanswered = false
+    /// The screen can't change its own brightness, so Dial dims the picture instead.
+    private(set) var dimsPicture = false
+    @ObservationIgnored private var curve: (red: [CGGammaValue], green: [CGGammaValue], blue: [CGGammaValue])?
     private(set) var modes: [DisplayMode] = []
     private(set) var current: DisplayMode?
 
@@ -118,12 +121,14 @@ final class ExternalDisplay: Identifiable {
                 if self.brightness == nil && self.volume == nil {
                     self.unanswered = true
                     log("\(self.name): no reply to brightness or volume")
+                    self.dimPicture()
                 }
             }
         }
         ddc?.read(.brightness) { reply in
             DispatchQueue.main.async {
                 guard let reply else { return self.retryLoad(after: attempt) }
+                guard !self.dimsPicture else { return } // too late: Dial already dims this screen
                 self.maxBrightness = reply.max
                 self.brightness = Double(reply.current) / Double(reply.max)
             }
@@ -151,8 +156,40 @@ final class ExternalDisplay: Identifiable {
     func setBrightness(_ value: Double) {
         let value = value.clamped
         brightness = value
-        ddc?.set(.brightness, UInt16((value * Double(maxBrightness)).rounded()))
+        if dimsPicture {
+            applyDimming()
+            UserDefaults.standard.set(value, forKey: dimKey)
+        } else {
+            ddc?.set(.brightness, UInt16((value * Double(maxBrightness)).rounded()))
+        }
     }
+
+    /// Switches brightness to dimming the picture, starting from the level used last time.
+    func dimPicture() {
+        guard !dimsPicture else { return }
+        dimsPicture = true
+        brightness = UserDefaults.standard.object(forKey: dimKey) as? Double ?? 1
+        applyDimming()
+        log("\(name): dimming the picture instead")
+    }
+
+    /// Scales the screen's own colour curve, so its calibration is kept. macOS resets the curve
+    /// when the screen reconnects (the store reapplies it) and when Dial quits.
+    func applyDimming() {
+        guard dimsPicture, let brightness else { return }
+        if curve == nil {
+            var red = [CGGammaValue](repeating: 0, count: 256), green = red, blue = red
+            var count: UInt32 = 0
+            guard CGGetDisplayTransferByTable(id, 256, &red, &green, &blue, &count) == .success, count > 0 else { return }
+            let n = Int(count)
+            curve = (Array(red.prefix(n)), Array(green.prefix(n)), Array(blue.prefix(n)))
+        }
+        guard let curve else { return }
+        let scale = CGGammaValue(0.1 + 0.9 * brightness) // never all the way to black
+        CGSetDisplayTransferByTable(id, UInt32(curve.red.count), curve.red.map { $0 * scale }, curve.green.map { $0 * scale }, curve.blue.map { $0 * scale })
+    }
+
+    private var dimKey: String { "dim" + memoryKey.dropFirst("mode".count) }
 
     func setVolume(_ value: Double) {
         let value = value.clamped
@@ -209,12 +246,13 @@ final class DisplayStore {
             // changed while the monitor reconnected.
             if let existing = displays.first(where: { $0.id == id }), existing.brightness != nil || existing.volume != nil {
                 existing.refreshDetail()
+                existing.applyDimming()
                 next.append(existing)
                 continue
             }
             let service = AVServiceLocator.match(for: id, in: services)
             let display = ExternalDisplay(id: id, name: Self.name(of: id) ?? service?.name ?? "Display", ddc: service?.ddc)
-            display.load()
+            if service == nil { display.dimPicture() } else { display.load() }
             display.restore()
             next.append(display)
         }
