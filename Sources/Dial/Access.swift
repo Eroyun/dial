@@ -24,6 +24,8 @@ final class Access {
 
     /// Opens the Accessibility list in System Settings, where the user turns Dial on.
     func ask() {
+        // Also puts Dial back in the list if the user removed it there.
+        AXIsProcessTrustedWithOptions([kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary)
         NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")!)
         watch()
     }

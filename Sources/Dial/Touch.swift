@@ -86,10 +86,8 @@ final class TouchController {
 
     private func startFilter() {
         guard !senders.isEmpty else { return }
-        let types: [CGEventType] = [.leftMouseDown, .leftMouseUp, .leftMouseDragged, .rightMouseDown, .rightMouseUp,
-                                    .rightMouseDragged, .mouseMoved, .otherMouseDown, .otherMouseUp, .otherMouseDragged, .scrollWheel,
-                                    .tabletPointer, .tabletProximity]
-        let mask = types.reduce(CGEventMask(0)) { $0 | CGEventMask(1) << $1.rawValue }
+        // Every event type: besides clicks and moves, panels send scrolls, gestures and system-defined events.
+        let mask = CGEventMask.max
         tap = CGEvent.tapCreate(
             tap: .cghidEventTap, place: .headInsertEventTap, options: .defaultTap, eventsOfInterest: mask,
             callback: { _, type, event, context in

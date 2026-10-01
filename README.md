@@ -66,7 +66,7 @@ Brightness, volume and screen size work right away. The keyboard keys and the to
 2. Turn on the switch next to **Dial**.
 3. Come back — Dial notices by itself.
 
-**Already on but not working?** This happens after an update. Switch Dial off and on again in that same list.
+**Dial is on in the list, but the panel still asks?** This happens after an update. Select **Dial** in that list, click the **−** button, then click **Open Settings** in Dial again and turn it on.
 
 ## Questions
 

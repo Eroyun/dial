@@ -156,7 +156,7 @@ private struct PermissionCard: View {
                     .contentShape(Capsule())
             }
             .buttonStyle(.plain)
-            Text("Dial is already on in that list? Switch it off and on again.")
+            Text("Dial already on but this still shows? Select Dial in the list, click −, then click Open Settings again.")
                 .font(.system(size: 10.5))
                 .foregroundStyle(.tertiary)
                 .fixedSize(horizontal: false, vertical: true)
