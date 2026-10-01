@@ -6,6 +6,8 @@ final class ExternalDisplay: Identifiable {
     let id: CGDirectDisplayID
     let name: String
     var detail: String = ""
+    /// Whether the size list is open in the panel.
+    var showingSizes = false
     /// 0...1, nil until read (or unsupported).
     var brightness: Double?
     var volume: Double?
@@ -13,11 +15,17 @@ final class ExternalDisplay: Identifiable {
     private(set) var modes: [DisplayMode] = []
     private(set) var current: DisplayMode?
 
-    /// Distinct "looks like" sizes, largest first.
+    /// Distinct "looks like" sizes, largest first. When a size comes both sharp (HiDPI) and
+    /// blurry, only the sharp one is offered.
     var resolutions: [DisplayMode] {
         var seen = Set<String>()
-        return modes.filter { seen.insert($0.sizeKey).inserted }
+        return modes
+            .sorted { ($0.width, $0.height, $0.hiDPI ? 1 : 0) > ($1.width, $1.height, $1.hiDPI ? 1 : 0) }
+            .filter { seen.insert($0.sizeLabel).inserted }
     }
+
+    /// The screen's real pixel size, e.g. 3840 × 2160.
+    private(set) var nativeSize = ""
 
     /// Refresh rates available at the current size.
     var refreshRates: [DisplayMode] {
@@ -47,7 +55,8 @@ final class ExternalDisplay: Identifiable {
         let now = DisplayMode(mode)
         current = modes.first { $0.sizeKey == now.sizeKey && $0.hz == now.hz } ?? now
         let native = modes.first(where: \.isNative)?.mode ?? mode
-        detail = "\(native.pixelWidth) × \(native.pixelHeight) panel"
+        nativeSize = "\(native.pixelWidth) × \(native.pixelHeight)"
+        detail = "\(nativeSize) screen"
     }
 
     /// Switch size, keeping the refresh rate when the new size offers it.

@@ -15,6 +15,11 @@ body:
       render: text
     validations:
       required: true
+  - type: textarea
+    attributes:
+      label: Dial log
+      description: "Optional. Paste the last lines of `~/Library/Logs/Dial.log` (in Finder: Go → Go to Folder…, then paste that path)."
+      render: text
   - type: input
     attributes:
       label: Mac and macOS version

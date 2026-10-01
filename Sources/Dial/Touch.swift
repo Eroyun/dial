@@ -36,6 +36,7 @@ final class TouchController {
     }
 
     func setEnabled(_ on: Bool) {
+        log("touch switch -> \(on ? "on" : "off")")
         guard on || Access.shared.granted else {
             waitingForPermission = true
             Access.shared.ask()
@@ -68,11 +69,14 @@ final class TouchController {
     private func apply() {
         release()
         guard !enabled else { return }
-        for device in interfaces() where IOHIDDeviceOpen(device, IOOptionBits(kIOHIDOptionsTypeSeizeDevice)) == kIOReturnSuccess {
-            seized.append(device)
+        for device in interfaces() {
+            let result = IOHIDDeviceOpen(device, IOOptionBits(kIOHIDOptionsTypeSeizeDevice))
+            if result == kIOReturnSuccess { seized.append(device) }
+            log("touch off: seize 0x\(String(UInt32(bitPattern: result), radix: 16))")
         }
         senders = senderIDs()
         startFilter()
+        log("touch off: blocking \(senders.map { "0x" + String($0, radix: 16) }), filter \(tap != nil ? "running" : "FAILED")")
     }
 
     private func release() {
