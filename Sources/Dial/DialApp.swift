@@ -14,7 +14,6 @@ struct DialApp: App {
         NSApplication.shared.setActivationPolicy(.accessory)
         let displays = DisplayStore()
         if let i = CommandLine.arguments.firstIndex(of: "--snapshot"), i + 1 < CommandLine.arguments.count {
-            if CommandLine.arguments.contains("--setup") { Access.shared.granted = false }
             Probe.snapshot(Panel(displays: displays, touch: touch, keys: KeyRouter(store: displays)), to: CommandLine.arguments[i + 1])
         }
         self.displays = displays

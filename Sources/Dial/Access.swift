@@ -7,8 +7,7 @@ import Observation
 final class Access {
     static let shared = Access()
 
-    // Settable only so `--snapshot` can render the setup card.
-    var granted = AXIsProcessTrusted()
+    private(set) var granted = AXIsProcessTrusted()
 
     @ObservationIgnored private var waiters: [() -> Void] = []
     @ObservationIgnored private var poll: Timer?
@@ -24,8 +23,14 @@ final class Access {
 
     /// Opens the Accessibility list in System Settings, where the user turns Dial on.
     func ask() {
-        // Also puts Dial back in the list if the user removed it there.
-        AXIsProcessTrustedWithOptions([kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary)
+        // An entry left by an older Dial build stays switched on in Settings but no longer applies
+        // to this copy, so clear Dial's own entry and add it back fresh before sending the user there.
+        let reset = Process()
+        reset.executableURL = URL(fileURLWithPath: "/usr/bin/tccutil")
+        reset.arguments = ["reset", "Accessibility", Bundle.main.bundleIdentifier ?? "io.github.eroyun.dial"]
+        try? reset.run()
+        reset.waitUntilExit()
+        AXIsProcessTrustedWithOptions([kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: false] as CFDictionary)
         NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")!)
         watch()
     }

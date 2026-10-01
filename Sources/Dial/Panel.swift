@@ -15,7 +15,6 @@ struct Panel: View {
                 ForEach(displays.displays) { DisplayCard(display: $0) }
             }
             if touch.available { TouchCard(touch: touch) }
-            if !Access.shared.granted && (keys.wanted || touch.waitingForPermission) { PermissionCard() }
         }
         .padding(14)
         .frame(width: 300)
@@ -30,7 +29,11 @@ struct Panel: View {
                 .font(.system(size: 14, weight: .semibold, design: .rounded))
             Spacer()
             Menu {
-                Toggle("Keyboard brightness & volume", isOn: Binding(get: { keys.wanted }, set: { keys.wanted = $0 }))
+                if Access.shared.granted {
+                    Toggle("Keyboard brightness & volume", isOn: Binding(get: { keys.wanted }, set: { keys.wanted = $0 }))
+                } else {
+                    Button("Use keyboard brightness & volume…") { keys.wanted = true; Access.shared.ask() }
+                }
                 Toggle("Launch at login", isOn: Binding(
                     get: { SMAppService.mainApp.status == .enabled },
                     set: { try? $0 ? SMAppService.mainApp.register() : SMAppService.mainApp.unregister() }
@@ -121,58 +124,15 @@ private struct TouchCard: View {
                 Text(status).font(.system(size: 11)).foregroundStyle(.secondary)
             }
             Spacer()
-            DialSwitch(isOn: touch.enabled && !touch.waitingForPermission, label: "Touch screen") { touch.setEnabled($0) }
+            DialSwitch(isOn: touch.enabled, label: "Touch screen") { touch.setEnabled($0) }
         }
         .padding(12)
         .card()
     }
 
     private var status: String {
-        if touch.waitingForPermission { return "Turns off after the step below" }
+        if touch.waitingForPermission { return "Turn on Dial in Settings to finish" }
         return touch.enabled ? "On" : "Off · touches are ignored"
-    }
-}
-
-/// The one setup step Dial needs, written for someone who has never opened System Settings.
-private struct PermissionCard: View {
-    var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 8) {
-                Image(systemName: "lock.open.fill").foregroundStyle(.orange)
-                Text("One quick step").font(.system(size: 12, weight: .semibold))
-            }
-            VStack(alignment: .leading, spacing: 5) {
-                step(1, "Click **Open Settings**")
-                step(2, "Turn on the switch next to **Dial**")
-                step(3, "Come back here — that's it")
-            }
-            Button { Access.shared.ask() } label: {
-                Text("Open Settings")
-                    .font(.system(size: 12, weight: .semibold))
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 28)
-                    .background(Color.accentColor, in: Capsule())
-                    .foregroundStyle(.white)
-                    .contentShape(Capsule())
-            }
-            .buttonStyle(.plain)
-            Text("Dial already on but this still shows? Select Dial in the list, click −, then click Open Settings again.")
-                .font(.system(size: 10.5))
-                .foregroundStyle(.tertiary)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-        .padding(12)
-        .card()
-    }
-
-    private func step(_ number: Int, _ text: LocalizedStringKey) -> some View {
-        HStack(alignment: .firstTextBaseline, spacing: 8) {
-            Text("\(number)")
-                .font(.system(size: 10, weight: .bold, design: .rounded))
-                .frame(width: 16, height: 16)
-                .background(.primary.opacity(0.1), in: Circle())
-            Text(text).font(.system(size: 11.5))
-        }
     }
 }
 
