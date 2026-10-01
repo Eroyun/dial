@@ -15,7 +15,7 @@ struct Panel: View {
                 ForEach(displays.displays) { DisplayCard(display: $0) }
             }
             if touch.available { TouchCard(touch: touch) }
-            if keys.needsPermission { permission }
+            if !Access.shared.granted && (keys.wanted || touch.waitingForPermission) { PermissionCard() }
         }
         .padding(14)
         .frame(width: 300)
@@ -66,25 +66,6 @@ struct Panel: View {
         .card()
     }
 
-    private var permission: some View {
-        Button { keys.requestPermission() } label: {
-            HStack(spacing: 10) {
-                Image(systemName: "keyboard.badge.ellipsis")
-                    .font(.system(size: 14))
-                    .foregroundStyle(.orange)
-                VStack(alignment: .leading, spacing: 1) {
-                    Text("Enable keyboard keys").font(.system(size: 12, weight: .semibold))
-                    Text("Grant Accessibility access").font(.system(size: 11)).foregroundStyle(.secondary)
-                }
-                Spacer()
-                Image(systemName: "chevron.right").font(.system(size: 10, weight: .bold)).foregroundStyle(.tertiary)
-            }
-            .padding(12)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .card()
-    }
 }
 
 private struct DisplayCard: View {
@@ -107,6 +88,7 @@ private struct DisplayCard: View {
                         .monospacedDigit()
                 }
             }
+            if !display.modes.isEmpty { ModeRow(display: display) }
             if let brightness = display.brightness {
                 DialSlider(value: brightness, symbol: "sun.max.fill") { display.setBrightness($0) }
             }
@@ -114,7 +96,7 @@ private struct DisplayCard: View {
                 DialSlider(value: volume, symbol: volume == 0 ? "speaker.slash.fill" : "speaker.wave.3.fill", variable: true) { display.setVolume($0) }
             }
             if display.brightness == nil && display.volume == nil {
-                Text(display.supportsDDC ? "Reading…" : "No hardware controls (DDC/CI unavailable)")
+                Text(display.supportsDDC ? "Reading…" : "This screen doesn't allow brightness control")
                     .font(.system(size: 11))
                     .foregroundStyle(.tertiary)
             }
@@ -128,34 +110,144 @@ private struct TouchCard: View {
     let touch: TouchController
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack(spacing: 10) {
-                Image(systemName: touch.enabled ? "hand.tap.fill" : "hand.raised.slash.fill")
-                    .font(.system(size: 14))
-                    .foregroundStyle(touch.enabled ? AnyShapeStyle(.primary) : AnyShapeStyle(.secondary))
-                    .contentTransition(.symbolEffect(.replace))
-                    .frame(width: 20)
-                VStack(alignment: .leading, spacing: 1) {
-                    Text("Touch screen").font(.system(size: 12, weight: .semibold))
-                    Text(touch.enabled ? "On" : "Off").font(.system(size: 11)).foregroundStyle(.secondary)
-                }
-                Spacer()
-                DialSwitch(isOn: touch.enabled) { touch.setEnabled($0) }
+        HStack(spacing: 10) {
+            Image(systemName: touch.enabled ? "hand.tap.fill" : "hand.raised.slash.fill")
+                .font(.system(size: 14))
+                .foregroundStyle(touch.enabled ? AnyShapeStyle(.primary) : AnyShapeStyle(.secondary))
+                .contentTransition(.symbolEffect(.replace))
+                .frame(width: 20)
+            VStack(alignment: .leading, spacing: 1) {
+                Text("Touch screen").font(.system(size: 12, weight: .semibold))
+                Text(status).font(.system(size: 11)).foregroundStyle(.secondary)
             }
-            if let error = touch.error {
-                Text(error).font(.system(size: 10.5)).foregroundStyle(.orange)
-            }
+            Spacer()
+            DialSwitch(isOn: touch.enabled && !touch.waitingForPermission, label: "Touch screen") { touch.setEnabled($0) }
         }
         .padding(12)
         .card()
+    }
+
+    private var status: String {
+        if touch.waitingForPermission { return "Turns off after the step below" }
+        return touch.enabled ? "On" : "Off · touches are ignored"
+    }
+}
+
+/// The one setup step Dial needs, written for someone who has never opened System Settings.
+private struct PermissionCard: View {
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 8) {
+                Image(systemName: "lock.open.fill").foregroundStyle(.orange)
+                Text("One quick step").font(.system(size: 12, weight: .semibold))
+            }
+            VStack(alignment: .leading, spacing: 5) {
+                step(1, "Click **Open Settings**")
+                step(2, "Turn on the switch next to **Dial**")
+                step(3, "Come back here — that's it")
+            }
+            Button { Access.shared.ask() } label: {
+                Text("Open Settings")
+                    .font(.system(size: 12, weight: .semibold))
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 28)
+                    .background(Color.accentColor, in: Capsule())
+                    .foregroundStyle(.white)
+                    .contentShape(Capsule())
+            }
+            .buttonStyle(.plain)
+            Text("Dial is already on in that list? Switch it off and on again.")
+                .font(.system(size: 10.5))
+                .foregroundStyle(.tertiary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(12)
+        .card()
+    }
+
+    private func step(_ number: Int, _ text: LocalizedStringKey) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            Text("\(number)")
+                .font(.system(size: 10, weight: .bold, design: .rounded))
+                .frame(width: 16, height: 16)
+                .background(.primary.opacity(0.1), in: Circle())
+            Text(text).font(.system(size: 11.5))
+        }
+    }
+}
+
+/// Resolution and refresh-rate pickers, styled as two pills.
+private struct ModeRow: View {
+    let display: ExternalDisplay
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Menu {
+                let sizes = display.resolutions
+                Section("Sharp text") { buttons(sizes.filter(\.hiDPI)) }
+                Section("Other sizes") { buttons(sizes.filter { !$0.hiDPI }) }
+            } label: {
+                Pill(symbol: "textformat.size", text: display.current?.sizeLabel ?? "–")
+            }
+            .menuStyle(.button).buttonStyle(.plain).menuIndicator(.hidden)
+
+            Menu {
+                ForEach(display.refreshRates) { mode in
+                    Button { display.select(refresh: mode) } label: {
+                        if mode.hz == display.current?.hz { Label("\(mode.hz) Hz", systemImage: "checkmark") } else { Text("\(mode.hz) Hz") }
+                    }
+                }
+            } label: {
+                Pill(symbol: "waveform.path", text: display.current.map { "\($0.hz) Hz" } ?? "–")
+            }
+            .menuStyle(.button).buttonStyle(.plain).menuIndicator(.hidden)
+            .fixedSize()
+        }
+    }
+
+    @ViewBuilder
+    private func buttons(_ modes: [DisplayMode]) -> some View {
+        ForEach(modes) { mode in
+            Button { display.select(size: mode) } label: {
+                let title = mode.sizeLabel + (mode.isNative ? "  (full size)" : "")
+                if mode.sizeKey == display.current?.sizeKey { Label(title, systemImage: "checkmark") } else { Text(title) }
+            }
+        }
+    }
+}
+
+private struct Pill: View {
+    let symbol: String
+    let text: String
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Image(systemName: symbol).font(.system(size: 10, weight: .semibold)).foregroundStyle(.secondary)
+            Text(text).font(.system(size: 11, weight: .semibold, design: .rounded)).monospacedDigit()
+            Spacer(minLength: 0)
+            Image(systemName: "chevron.up.chevron.down").font(.system(size: 8, weight: .bold)).foregroundStyle(.tertiary)
+        }
+        .padding(.horizontal, 10)
+        .frame(height: 26)
+        .frame(maxWidth: .infinity)
+        .background(.primary.opacity(0.07), in: Capsule())
+        .contentShape(Capsule())
     }
 }
 
 struct DialSwitch: View {
     let isOn: Bool
+    var label = ""
     let onChange: (Bool) -> Void
 
     var body: some View {
+        Button { withAnimation(.snappy(duration: 0.22)) { onChange(!isOn) } } label: { knob }
+            .buttonStyle(.plain)
+            .accessibilityLabel(label)
+            .accessibilityValue(isOn ? "On" : "Off")
+    }
+
+    private var knob: some View {
         Capsule()
             .fill(isOn ? AnyShapeStyle(.primary.opacity(0.92)) : AnyShapeStyle(.primary.opacity(0.12)))
             .frame(width: 38, height: 22)
@@ -166,10 +258,6 @@ struct DialSwitch: View {
                     .shadow(color: .black.opacity(0.18), radius: 1.5, y: 0.5)
             }
             .contentShape(Capsule())
-            .onTapGesture { withAnimation(.snappy(duration: 0.22)) { onChange(!isOn) } }
-            .accessibilityElement()
-            .accessibilityAddTraits(.isButton)
-            .accessibilityValue(isOn ? "On" : "Off")
     }
 }
 

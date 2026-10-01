@@ -1,58 +1,101 @@
-# Dial
-
-A tiny menu-bar app for external monitors on Apple silicon Macs.
-
 <p align="center">
-  <img src="docs/panel-dark.png" width="320" alt="Dial panel">
+  <img src="docs/icon.png" width="128" alt="Dial icon">
 </p>
 
-- **Brightness & volume** for every external display, using the monitor's own hardware controls (DDC/CI) — no dimming overlays.
-- **Keyboard keys** — brightness keys adjust the display under the pointer; volume keys adjust the monitor's speakers when it is the sound output. A small glass HUD shows the level.
-- **Touch screen on/off** — USB touch monitors (UPERFECT, ASUS ZenScreen, …) can be switched off in one click, so a stray palm can't click things.
+<h1 align="center">Dial</h1>
 
-That's it. No accounts, no network, no settings window.
+<p align="center">
+  <b>Brightness, volume, screen size and touch for your external monitors — right from the menu bar.</b>
+</p>
 
-## Install
+<p align="center">
+  <a href="https://github.com/Eroyun/dial/releases/latest/download/Dial.dmg">
+    <img src="https://img.shields.io/badge/Download%20Dial-for%20Mac-0A84FF?style=for-the-badge&logo=apple&logoColor=white" alt="Download Dial for Mac" height="44">
+  </a>
+</p>
 
-Requires macOS 14+ on Apple silicon and the Xcode Command Line Tools (`xcode-select --install`).
+<p align="center">
+  <a href="https://github.com/Eroyun/dial/actions/workflows/ci.yml"><img src="https://github.com/Eroyun/dial/actions/workflows/ci.yml/badge.svg" alt="Build"></a>
+  <a href="https://github.com/Eroyun/dial/releases/latest"><img src="https://img.shields.io/github/v/release/Eroyun/dial?label=version" alt="Latest version"></a>
+  <img src="https://img.shields.io/badge/macOS-14%2B-black" alt="macOS 14 or later">
+  <img src="https://img.shields.io/badge/Apple%20silicon-M1%20to%20M5-black" alt="Apple silicon">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-black" alt="MIT license"></a>
+</p>
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/panel-dark.png">
+    <img src="docs/panel-light.png" width="340" alt="The Dial panel">
+  </picture>
+</p>
+
+## What it does
+
+- ☀️ **Brightness** — changes the monitor's real backlight, not a dark overlay.
+- 🔊 **Volume** — for monitors with speakers.
+- 🔍 **Screen size** — make everything bigger or smaller, and pick the refresh rate.
+- ⌨️ **Keyboard keys** — your Mac's brightness and volume keys work on the monitor too.
+- ✋ **Touch on/off** — turn a touch screen off so a stray hand can't click things.
+
+No account, no internet, no settings to learn.
+
+## Install — 4 steps, no Terminal
+
+1. Click **[Download Dial](https://github.com/Eroyun/dial/releases/latest/download/Dial.dmg)**.
+2. Open the downloaded **Dial.dmg** and drag **Dial** onto the **Applications** folder.
+3. Open **Dial** from your Applications folder. The dial icon appears at the top of your screen, next to the clock.
+4. Click the dial icon. That's it.
+
+<details>
+<summary><b>Mac says "Dial Not Opened" or "Apple could not verify"?</b></summary>
+
+Dial is free and isn't sold through Apple, so macOS asks you to confirm once:
+
+1. Click **Done** on the message.
+2. Open **System Settings → Privacy & Security**.
+3. Scroll down and click **Open Anyway** next to Dial, then enter your Mac password.
+
+You only do this once.
+</details>
+
+## Turning on keys and touch control
+
+Brightness, volume and screen size work right away. The keyboard keys and the touch switch need one permission:
+
+1. In the Dial panel, click **Open Settings**.
+2. Turn on the switch next to **Dial**.
+3. Come back — Dial notices by itself.
+
+**Already on but not working?** This happens after an update. Switch Dial off and on again in that same list.
+
+## Questions
+
+**Can I use Control Center instead?**
+No. Apple doesn't let apps add external-monitor sliders to Control Center, so Dial lives in the menu bar instead.
+
+**My monitor shows "doesn't allow brightness control".**
+Some monitors, docks and adapters (especially DisplayLink) block the signal Dial uses. Try connecting the monitor straight to the Mac with USB-C or HDMI.
+
+**I want more screen sizes than the list shows.**
+Dial shows every size macOS offers for your monitor. Adding new sizes needs deeper system changes; [BetterDisplay](https://github.com/waydabber/BetterDisplay) does that.
+
+**How do I make Dial start with my Mac?**
+Click **⋯** in the panel and choose **Launch at login**.
+
+## For developers
 
 ```bash
-git clone https://github.com/eroyun/dial.git
-cd dial
-./scripts/build-app.sh
-open build/Dial.app
+git clone https://github.com/Eroyun/dial.git && cd dial
+./scripts/build-app.sh          # builds build/Dial.app (needs Xcode Command Line Tools)
+build/Dial.app/Contents/MacOS/Dial --probe   # what Dial sees, for bug reports
 ```
 
-Move `build/Dial.app` to `/Applications` if you want to keep it, then turn on **Launch at login** from the `…` menu.
+How it works:
+- **Brightness and volume** use DDC/CI, which is the monitor's own control channel over the video cable. On Apple silicon it goes through `IOAVService`, and each screen is matched to its channel through the IO registry.
+- **Screen size** switches between the display modes macOS reports, using `CGConfigureDisplayWithDisplayMode`.
+- **Touch off** seizes the touch panel's USB HID device. It also drops pointer events sent by that panel at the HID event tap.
 
-### Permissions
-
-| Feature | Permission | Where |
-| --- | --- | --- |
-| Keyboard brightness/volume keys | Accessibility | System Settings → Privacy & Security → Accessibility |
-| Touch screen on/off | Input Monitoring | System Settings → Privacy & Security → Input Monitoring |
-
-Brightness and volume sliders need no permission.
-
-## Command line
-
-```bash
-build/Dial.app/Contents/MacOS/Dial --probe                          # what Dial can see (for bug reports)
-build/Dial.app/Contents/MacOS/Dial --set "HG645" brightness 40       # set a value from scripts
-```
-
-## How it works
-
-- **DDC/CI** — monitors expose brightness (VCP `0x10`) and volume (`0x62`) over the video cable's I²C channel. On Apple silicon, Dial reaches it through the `IOAVService` API, pairing each display with its service by walking the IO registry. This works over USB-C/DisplayPort and the built-in HDMI port on recent Macs. Some monitors, docks and DisplayLink adapters don't pass DDC through.
-- **Touch** — the touch panel is a separate USB HID device. Turning touch off opens it exclusively (`kIOHIDOptionsTypeSeizeDevice`), so macOS stops receiving its events; turning it on releases it.
-- **Keys** — a session event tap catches the media keys and only swallows them when an external display should handle them.
-
-## Limitations
-
-- macOS does not let apps drive the built-in **Control Center** Display and Sound sliders for external monitors.
-- Some monitors answer volume requests even without speakers.
-- Builds are ad-hoc signed, so macOS asks for permissions again after each rebuild. Set `SIGN_IDENTITY` to a stable certificate to avoid that.
-- Display scaling (HiDPI modes) is out of scope — use BetterDisplay for that.
+See [CONTRIBUTING.md](CONTRIBUTING.md) to help out.
 
 ## Credits
 
@@ -60,4 +103,4 @@ DDC on Apple silicon was pioneered by [MonitorControl](https://github.com/Monito
 
 ## License
 
-MIT
+[MIT](LICENSE)

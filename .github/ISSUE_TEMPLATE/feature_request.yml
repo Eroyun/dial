@@ -1,0 +1,9 @@
+name: Feature request
+description: Suggest something small that fits Dial
+labels: [enhancement]
+body:
+  - type: textarea
+    attributes:
+      label: What would you like Dial to do?
+    validations:
+      required: true

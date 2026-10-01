@@ -10,6 +10,21 @@ final class ExternalDisplay: Identifiable {
     var brightness: Double?
     var volume: Double?
     var supportsDDC: Bool { ddc != nil }
+    private(set) var modes: [DisplayMode] = []
+    private(set) var current: DisplayMode?
+
+    /// Distinct "looks like" sizes, largest first.
+    var resolutions: [DisplayMode] {
+        var seen = Set<String>()
+        return modes.filter { seen.insert($0.sizeKey).inserted }
+    }
+
+    /// Refresh rates available at the current size.
+    var refreshRates: [DisplayMode] {
+        guard let current else { return [] }
+        var seen = Set<Int>()
+        return modes.filter { $0.sizeKey == current.sizeKey && seen.insert($0.hz).inserted }.sorted { $0.hz > $1.hz }
+    }
 
     @ObservationIgnored private let ddc: DDCWriter?
     @ObservationIgnored private var maxBrightness: UInt16 = 100
@@ -24,8 +39,34 @@ final class ExternalDisplay: Identifiable {
 
     func refreshDetail() {
         guard let mode = CGDisplayCopyDisplayMode(id) else { return }
-        let hz = mode.refreshRate > 0 ? " · \(Int(mode.refreshRate.rounded())) Hz" : ""
-        detail = "\(mode.width) × \(mode.height)\(hz)"
+        let all = (CGDisplayCopyAllDisplayModes(id, [kCGDisplayShowDuplicateLowResolutionModes: true] as CFDictionary) as? [CGDisplayMode]) ?? []
+        var seen = Set<String>()
+        modes = all.map(DisplayMode.init)
+            .filter { $0.mode.isUsableForDesktopGUI() && $0.width >= 1024 && seen.insert("\($0.sizeKey)@\($0.hz)").inserted }
+            .sorted { ($0.width, $0.hiDPI ? 1 : 0, $0.hz) > ($1.width, $1.hiDPI ? 1 : 0, $1.hz) }
+        let now = DisplayMode(mode)
+        current = modes.first { $0.sizeKey == now.sizeKey && $0.hz == now.hz } ?? now
+        let native = modes.first(where: \.isNative)?.mode ?? mode
+        detail = "\(native.pixelWidth) × \(native.pixelHeight) panel"
+    }
+
+    /// Switch size, keeping the refresh rate when the new size offers it.
+    func select(size: DisplayMode) {
+        let hz = current?.hz ?? 0
+        let candidates = modes.filter { $0.sizeKey == size.sizeKey }
+        apply(candidates.first { $0.hz == hz } ?? candidates.max { $0.hz < $1.hz } ?? size)
+    }
+
+    func select(refresh: DisplayMode) { apply(refresh) }
+
+    private func apply(_ mode: DisplayMode) {
+        var config: CGDisplayConfigRef?
+        guard CGBeginDisplayConfiguration(&config) == .success else { return }
+        CGConfigureDisplayWithDisplayMode(config, id, mode.mode, nil)
+        if CGCompleteDisplayConfiguration(config, .permanently) != .success {
+            CGCancelDisplayConfiguration(config)
+        }
+        refreshDetail()
     }
 
     func load() {
@@ -120,6 +161,20 @@ final class DisplayStore {
             ($0.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber)?.uint32Value == id
         }?.localizedName
     }
+}
+
+struct DisplayMode: Identifiable {
+    let mode: CGDisplayMode
+    var id: Int32 { mode.ioDisplayModeID }
+    var width: Int { mode.width }
+    var height: Int { mode.height }
+    var hz: Int { Int(mode.refreshRate.rounded()) }
+    var hiDPI: Bool { mode.pixelWidth > mode.width }
+    var isNative: Bool { mode.ioFlags & UInt32(kDisplayModeNativeFlag) != 0 }
+    var sizeKey: String { "\(width)x\(height)\(hiDPI ? "@2x" : "")" }
+    var sizeLabel: String { "\(width) × \(height)" }
+
+    init(_ mode: CGDisplayMode) { self.mode = mode }
 }
 
 extension Double {

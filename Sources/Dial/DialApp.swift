@@ -14,6 +14,7 @@ struct DialApp: App {
         NSApplication.shared.setActivationPolicy(.accessory)
         let displays = DisplayStore()
         if let i = CommandLine.arguments.firstIndex(of: "--snapshot"), i + 1 < CommandLine.arguments.count {
+            if CommandLine.arguments.contains("--setup") { Access.shared.granted = false }
             Probe.snapshot(Panel(displays: displays, touch: touch, keys: KeyRouter(store: displays)), to: CommandLine.arguments[i + 1])
         }
         self.displays = displays
@@ -44,6 +45,9 @@ enum Probe {
             let brightness = match?.ddc.read(.brightness).map { "\($0.current)/\($0.max)" } ?? "–"
             let volume = match?.ddc.read(.volume).map { "\($0.current)/\($0.max)" } ?? "–"
             print("display \(id) [\(CGDisplayVendorNumber(id)):\(CGDisplayModelNumber(id))] → \(match?.name ?? "no I2C service")  brightness=\(brightness) volume=\(volume)")
+            let display = ExternalDisplay(id: id, name: "", ddc: nil)
+            print("  current: \(display.current.map { "\($0.sizeKey)@\($0.hz)" } ?? "?")  sizes: \(display.resolutions.map(\.sizeKey).joined(separator: " "))")
+            print("  refresh: \(display.refreshRates.map { "\($0.hz)" }.joined(separator: " "))")
         }
         exit(0)
     }

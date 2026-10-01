@@ -17,7 +17,6 @@ final class KeyRouter {
 
     @ObservationIgnored private let store: DisplayStore
     @ObservationIgnored private var tap: CFMachPort?
-    @ObservationIgnored private var retry: Timer?
     private let step = 1.0 / 16
 
     init(store: DisplayStore) {
@@ -26,24 +25,10 @@ final class KeyRouter {
         if wanted { start() }
     }
 
-    var needsPermission: Bool { wanted && !active }
-
-    func requestPermission() {
-        let prompt = kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String
-        AXIsProcessTrustedWithOptions([prompt: true] as CFDictionary)
-        start()
-    }
-
     private func start() {
         guard tap == nil else { return }
-        guard AXIsProcessTrusted() else {
-            // Pick it up as soon as the user grants Accessibility.
-            retry?.invalidate()
-            retry = Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { [weak self] _ in
-                guard let self, AXIsProcessTrusted() else { return }
-                self.retry?.invalidate()
-                self.start()
-            }
+        guard Access.shared.granted else {
+            Access.shared.whenGranted { [weak self] in if self?.wanted == true { self?.start() } }
             return
         }
         let mask = CGEventMask(1 << 14) | CGEventMask(1 << CGEventType.keyDown.rawValue) // 14 = NX_SYSDEFINED
@@ -64,7 +49,6 @@ final class KeyRouter {
     }
 
     private func stop() {
-        retry?.invalidate()
         if let tap { CGEvent.tapEnable(tap: tap, enable: false); CFMachPortInvalidate(tap) }
         tap = nil
         active = false
