@@ -13,7 +13,8 @@ struct Panel: View {
             } else {
                 ForEach(displays.displays) { DisplayCard(display: $0, all: displays.displays) }
             }
-            if touch.available { TouchCard(touch: touch) }
+            // The touch device can outlive the picture on a flaky cable; without a screen the switch means nothing.
+            if touch.available && !displays.displays.isEmpty { TouchCard(touch: touch) }
             if !Access.shared.granted { KeysSetupCard() }
         }
         .padding(14)
