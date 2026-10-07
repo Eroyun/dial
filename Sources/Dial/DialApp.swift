@@ -1,35 +1,24 @@
 import SwiftUI
 
 @main
-struct DialApp: App {
-    // Plain lets, not @State: the app is created once, and SwiftUI's @State macro
-    // is not available when building with the Command Line Tools alone.
-    private let displays: DisplayStore
-    private let touch = TouchController()
-    private let keys: KeyRouter
-    private let rightClick: RightClickMenu
-
-    init() {
+enum DialApp {
+    // Plain AppKit start-up: Dial has no windows of its own besides the panel, and a SwiftUI
+    // App needs a scene, which would add an empty Settings window.
+    @MainActor static func main() {
         if CommandLine.arguments.contains("--probe") { Probe.run() }
         if let i = CommandLine.arguments.firstIndex(of: "--set") { Probe.set(Array(CommandLine.arguments.dropFirst(i + 1))) }
-        NSApplication.shared.setActivationPolicy(.accessory)
+        let app = NSApplication.shared
+        app.setActivationPolicy(.accessory)
         let displays = DisplayStore()
+        let touch = TouchController()
         if let i = CommandLine.arguments.firstIndex(of: "--snapshot"), i + 1 < CommandLine.arguments.count {
             Probe.snapshot(Panel(displays: displays, touch: touch), to: CommandLine.arguments[i + 1])
         }
-        self.displays = displays
-        self.keys = KeyRouter(store: displays)
-        self.rightClick = RightClickMenu(touch: touch)
+        let keys = KeyRouter(store: displays)
+        let rightClick = RightClickMenu(touch: touch)
+        let panel = StatusPanel(displays: displays, touch: touch)
         Install.check()
-    }
-
-    var body: some Scene {
-        MenuBarExtra {
-            Panel(displays: displays, touch: touch)
-        } label: {
-            Image(systemName: "dial.medium.fill")
-        }
-        .menuBarExtraStyle(.window)
+        withExtendedLifetime((keys, rightClick, panel)) { app.run() }
     }
 }
 

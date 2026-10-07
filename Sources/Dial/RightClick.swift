@@ -1,8 +1,8 @@
 import AppKit
 
 /// Right-clicking the menu-bar icon opens a short menu of switches, so they can be flipped
-/// without opening the panel. MenuBarExtra has no right-click hook, so Dial watches for
-/// right-clicks that land on its own status bar window.
+/// without opening the panel. Dial watches for right-clicks that land on its own status bar
+/// window.
 final class RightClickMenu {
     private let touch: TouchController
     private var monitor: Any?
