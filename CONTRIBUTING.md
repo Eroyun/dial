@@ -1,11 +1,12 @@
 # Contributing
 
-Dial stays small on purpose: brightness, volume, resolution and touch for external displays. Changes that keep it that way are very welcome.
+Dial controls external displays, keyboard shortcuts, screenshots and sleep. Keep changes small and focused.
 
 ## Develop
 
 ```bash
 swift build                    # debug build
+./scripts/test-all.sh           # all hardware-free tests
 .build/debug/Dial --probe      # what Dial sees on your machine
 ./scripts/build-app.sh --install   # build and install to /Applications
 ```

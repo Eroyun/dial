@@ -8,23 +8,83 @@ import Observation
 @Observable
 final class KeyRouter {
     private(set) var active = false
+    private(set) var capturedChord: DialKeyChord?
+    private(set) var recording = false
+    @ObservationIgnored var onNativeAction: ((KeyboardNativeAction) -> Void)?
+    @ObservationIgnored var cancelCaptureSelectionForKey: (() -> Bool)?
+    @ObservationIgnored weak var recordingWindow: NSWindow?
+    @ObservationIgnored private var capturedHeld: Set<UInt16> = []
+    @ObservationIgnored private var capturedAuxiliaryHeld: Set<Int> = []
+    @ObservationIgnored private var keyboardPolicy = KeyboardRoutingPolicy()
+    @ObservationIgnored private var runLoopSource: CFRunLoopSource?
+    @ObservationIgnored private var terminationObserver: NSObjectProtocol?
+    @ObservationIgnored private var cleanedUp = false
 
-    @ObservationIgnored private let store: DisplayStore
+    @ObservationIgnored private let store: DisplayStore?
+    @ObservationIgnored private let mappings: KeyboardMappings
+    @ObservationIgnored private let postRelease: (DialKeyChord) -> Void
     @ObservationIgnored private var tap: CFMachPort?
     private let step = 1.0 / 16
+    private static let releaseEventTag: Int64 = 0x4449414C4B455955
 
-    init(store: DisplayStore) {
+    init(store: DisplayStore?, startMonitoring: Bool = true,
+         mappings: KeyboardMappings? = nil, postRelease: ((DialKeyChord) -> Void)? = nil) {
         self.store = store
-        start()
+        self.mappings = mappings ?? .shared
+        self.postRelease = postRelease ?? Self.postRelease
+        terminationObserver = NotificationCenter.default.addObserver(
+            forName: NSApplication.willTerminateNotification, object: nil, queue: nil
+        ) { [weak self] _ in self?.cleanUp() }
+        if startMonitoring { start() }
+    }
+
+    func beginRecording() {
+        capturedChord = nil
+        recording = true
+    }
+
+    func cancelRecording() { recording = false }
+    func clearCapturedChord() { capturedChord = nil }
+
+    deinit { cleanUp() }
+
+    private func cleanUp() {
+        guard !cleanedUp else { return }
+        cleanedUp = true
+        releaseHeldOutputs()
+        capturedHeld.removeAll()
+        capturedAuxiliaryHeld.removeAll()
+        recording = false
+        active = false
+        if let tap { CGEvent.tapEnable(tap: tap, enable: false); CFMachPortInvalidate(tap) }
+        if let runLoopSource { CFRunLoopRemoveSource(CFRunLoopGetMain(), runLoopSource, .commonModes) }
+        tap = nil
+        runLoopSource = nil
+        if let terminationObserver { NotificationCenter.default.removeObserver(terminationObserver) }
+        terminationObserver = nil
+    }
+
+    /// Release mapped keys if Dial exits or its event tap is disabled during a key press.
+    private func releaseHeldOutputs() {
+        for chord in keyboardPolicy.drain() {
+            postRelease(chord)
+        }
+    }
+
+    private static func postRelease(_ chord: DialKeyChord) {
+        guard let release = CGEvent(keyboardEventSource: nil, virtualKey: chord.keyCode, keyDown: false) else { return }
+        release.flags = CGEventFlags(rawValue: chord.modifiers)
+        release.setIntegerValueField(.eventSourceUserData, value: releaseEventTag)
+        release.post(tap: .cgAnnotatedSessionEventTap)
     }
 
     private func start() {
-        guard tap == nil else { return }
+        guard !cleanedUp, tap == nil else { return }
         guard Access.shared.granted else {
             Access.shared.whenGranted { [weak self] in self?.start() }
             return
         }
-        let mask = CGEventMask(1 << 14) | CGEventMask(1 << CGEventType.keyDown.rawValue) // 14 = NX_SYSDEFINED
+        let mask = CGEventMask(1 << 14) | CGEventMask(1 << CGEventType.keyDown.rawValue) | CGEventMask(1 << CGEventType.keyUp.rawValue) // 14 = NX_SYSDEFINED
         tap = CGEvent.tapCreate(
             tap: .cgSessionEventTap, place: .headInsertEventTap, options: .defaultTap,
             eventsOfInterest: mask,
@@ -35,18 +95,89 @@ final class KeyRouter {
             userInfo: Unmanaged.passUnretained(self).toOpaque()
         )
         guard let tap else { return }
-        let source = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, tap, 0)
-        CFRunLoopAddSource(CFRunLoopGetMain(), source, .commonModes)
+        runLoopSource = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, tap, 0)
+        CFRunLoopAddSource(CFRunLoopGetMain(), runLoopSource, .commonModes)
         CGEvent.tapEnable(tap: tap, enable: true)
         active = true
     }
 
     private enum Key { case brightnessUp, brightnessDown, volumeUp, volumeDown, mute }
 
-    private func handle(_ type: CGEventType, _ event: CGEvent) -> Unmanaged<CGEvent>? {
+    func handle(_ type: CGEventType, _ event: CGEvent) -> Unmanaged<CGEvent>? {
+        guard !cleanedUp else { return Unmanaged.passUnretained(event) }
         if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
+            releaseHeldOutputs()
+            capturedHeld.removeAll()
+            capturedAuxiliaryHeld.removeAll()
+            recording = false
             if let tap { CGEvent.tapEnable(tap: tap, enable: true) }
             return Unmanaged.passUnretained(event)
+        }
+        if event.getIntegerValueField(.eventSourceUserData) == Self.releaseEventTag {
+            return Unmanaged.passUnretained(event)
+        }
+        if type == .keyDown || type == .keyUp {
+            let code = UInt16(truncatingIfNeeded: event.getIntegerValueField(.keyboardEventKeycode))
+            let chord = DialKeyChord(keyCode: code, modifiers: event.flags.rawValue)
+            let down = type == .keyDown
+            let autorepeat = event.getIntegerValueField(.keyboardEventAutorepeat) != 0
+            if capturedHeld.contains(code) {
+                if !down { capturedHeld.remove(code) }
+                return nil
+            }
+            // Selection owns every key before mappings or display hotkeys can
+            // turn it into another action. Consume its matching release too.
+            if down, !autorepeat, !keyboardPolicy.isHolding(code), cancelCaptureSelectionForKey?() == true {
+                capturedHeld.insert(code)
+                return nil
+            }
+            let canRecord = recording && NSApp.isActive && recordingWindow?.isKeyWindow == true
+            if recording && !canRecord { recording = false }
+            let decision = keyboardPolicy.route(chord, down: down,
+                repeating: autorepeat,
+                mappingsEnabled: mappings.enabled, mappings: mappings.mappings,
+                numLockOn: mappings.numLockOn, mode: mappings.numpadMode, paused: canRecord)
+            switch decision {
+            case .perform(let action):
+                DispatchQueue.main.async { [weak self] in
+                    guard let self, !self.cleanedUp else { return }
+                    self.onNativeAction?(action)
+                }
+                return nil
+            case .consume: return nil
+            case .toggle:
+                mappings.numLockOn.toggle()
+                return nil
+            case .transform(let destination):
+                event.setIntegerValueField(.keyboardEventKeycode, value: Int64(destination.keyCode))
+                event.flags = CGEventFlags(rawValue: destination.modifiers)
+                event.keyboardSetUnicodeString(stringLength: 0, unicodeString: nil)
+                return Unmanaged.passUnretained(event)
+            case .pass: break
+            }
+            if canRecord, down, !chord.isModifierOnly,
+               event.getIntegerValueField(.keyboardEventAutorepeat) == 0 {
+                capturedChord = chord
+                capturedHeld.insert(code)
+                recording = false
+                return nil
+            }
+
+        }
+        // NX_SYSDEFINED also carries mouse/device notifications. Only subtype
+        // 8 is an auxiliary keyboard event; a left click must reach the picker.
+        if type.rawValue == 14, let systemEvent = NSEvent(cgEvent: event),
+           systemEvent.subtype.rawValue == 8 {
+            let code = (systemEvent.data1 & 0xFFFF0000) >> 16
+            let down = ((systemEvent.data1 & 0xFF00) >> 8) == 0xA
+            if capturedAuxiliaryHeld.contains(code) {
+                if !down { capturedAuxiliaryHeld.remove(code) }
+                return nil
+            }
+            if down, cancelCaptureSelectionForKey?() == true {
+                capturedAuxiliaryHeld.insert(code)
+                return nil
+            }
         }
         guard let (key, down) = key(for: type, event) else { return Unmanaged.passUnretained(event) }
         let fine = event.flags.contains(.maskShift) && event.flags.contains(.maskAlternate)
@@ -54,7 +185,7 @@ final class KeyRouter {
 
         switch key {
         case .brightnessUp, .brightnessDown:
-            guard let display = store.display(at: event.location), let value = display.brightness else { break }
+            guard let display = store?.display(at: event.location), let value = display.brightness else { break }
             guard down else { return nil } // swallow the key-up too, or macOS shows its own HUD
             let next = (value + (key == .brightnessUp ? delta : -delta)).clamped
             display.setBrightness(next)
@@ -72,11 +203,11 @@ final class KeyRouter {
     }
 
     private func key(for type: CGEventType, _ event: CGEvent) -> (Key, down: Bool)? {
-        if type == .keyDown {
+        if type == .keyDown || type == .keyUp {
             // Apple keyboards on recent macOS send brightness as plain key codes.
             switch event.getIntegerValueField(.keyboardEventKeycode) {
-            case 144: return (.brightnessUp, true)
-            case 145: return (.brightnessDown, true)
+            case 144: return (.brightnessUp, type == .keyDown)
+            case 145: return (.brightnessDown, type == .keyDown)
             default: return nil
             }
         }
@@ -110,6 +241,6 @@ final class KeyRouter {
         size = UInt32(MemoryLayout<Unmanaged<CFString>?>.size)
         address.mSelector = kAudioObjectPropertyName
         guard AudioObjectGetPropertyData(device, &address, 0, nil, &size, &name) == noErr, let name else { return nil }
-        return store.display(named: name.takeRetainedValue() as String)
+        return store?.display(named: name.takeRetainedValue() as String)
     }
 }

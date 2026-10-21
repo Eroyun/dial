@@ -1,25 +1,67 @@
 import SwiftUI
+import CDDC
 
 @main
 enum DialApp {
     // Plain AppKit start-up: Dial has no windows of its own besides the panel, and a SwiftUI
     // App needs a scene, which would add an empty Settings window.
     @MainActor static func main() {
+        if let status = AwakeBrokerClient.runIfRequested(Array(CommandLine.arguments.dropFirst())) { exit(status) }
+        if CommandLine.arguments.contains("--diagnose") { DisplayDiagnostics.run() }
+        if let i = CommandLine.arguments.firstIndex(of: "--save-current") {
+            DisplayDiagnostics.saveCurrent(Array(CommandLine.arguments.dropFirst(i + 1)))
+        }
+        if let status = KeyboardCommand.runIfRequested(arguments: Array(CommandLine.arguments.dropFirst())) { exit(status) }
+        if let status = CaptureCommand.runIfRequested(Array(CommandLine.arguments.dropFirst())) { exit(status) }
+        AULAClockCommand.runIfRequested(CommandLine.arguments)
         if CommandLine.arguments.contains("--probe") { Probe.run() }
         if let i = CommandLine.arguments.firstIndex(of: "--set") { Probe.set(Array(CommandLine.arguments.dropFirst(i + 1))) }
         let app = NSApplication.shared
         app.setActivationPolicy(.accessory)
+        if let i = CommandLine.arguments.firstIndex(of: "--keyboard-snapshot"), i + 1 < CommandLine.arguments.count {
+            let keys = KeyRouter(store: nil, startMonitoring: false)
+            let view = KeyboardSettingsView(editor: KeyboardEditor(router: keys), showConnectionStatus: false)
+            for scheme in [ColorScheme.dark, .light] {
+                let host = NSHostingView(rootView: view.environment(\.colorScheme, scheme))
+                let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 820, height: 780), styleMask: [.borderless], backing: .buffered, defer: false)
+                window.appearance = NSAppearance(named: scheme == .dark ? .darkAqua : .aqua)
+                window.contentView = host
+                host.frame = NSRect(x: 0, y: 0, width: 820, height: 780)
+                host.layoutSubtreeIfNeeded()
+                RunLoop.main.run(until: Date().addingTimeInterval(0.3))
+                let file = CommandLine.arguments[i + 1].replacingOccurrences(of: ".png", with: "-\(scheme == .dark ? "dark" : "light").png")
+                guard let bitmap = host.bitmapImageRepForCachingDisplay(in: host.bounds) else { exit(1) }
+                host.cacheDisplay(in: host.bounds, to: bitmap)
+                guard let png = bitmap.representation(using: .png, properties: [:]) else { exit(1) }
+                do { try png.write(to: URL(fileURLWithPath: file)) } catch { print(error); exit(1) }
+                print("wrote \(file)")
+            }
+            exit(0)
+        }
         let displays = DisplayStore()
-        let touch = TouchController()
         if let i = CommandLine.arguments.firstIndex(of: "--snapshot"), i + 1 < CommandLine.arguments.count {
-            Probe.snapshot(Panel(displays: displays, touch: touch), to: CommandLine.arguments[i + 1])
+            Probe.snapshot(Panel(displays: displays), to: CommandLine.arguments[i + 1])
         }
         let keys = KeyRouter(store: displays)
-        let rightClick = RightClickMenu(touch: touch)
-        let panel = StatusPanel(displays: displays, touch: touch)
+        let capture = ScrollScreenshot.shared
+        keys.cancelCaptureSelectionForKey = { capture.cancelSelectionForInput() }
+        keys.onNativeAction = { action in
+            switch action {
+            case .screenshotSelection, .copyScreenshotSelection:
+                NativeScreenshot.shared.perform(action)
+            case .scrollingScreenshot, .copyScrollingScreenshot:
+                capture.start(copyWhenDone: action == .copyScrollingScreenshot)
+            }
+        }
+        let keyboard = KeyboardSettingsWindow(router: keys)
+        let panel = StatusPanel(displays: displays, openKeyboard: { keyboard.show() })
+        let rightClick = RightClickMenu()
         Install.check()
-        withExtendedLifetime((keys, rightClick, panel)) { app.run() }
+        if CommandLine.arguments.contains("--keyboard") { keyboard.show() }
+        withExtendedLifetime((keys, keyboard, panel, rightClick, capture)) { app.run() }
     }
+
+
 }
 
 /// `Dial --probe` prints what Dial can see, for bug reports.

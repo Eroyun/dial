@@ -12,6 +12,8 @@ jobs:
     runs-on: macos-26
     steps:
       - uses: actions/checkout@v4
+      - name: Test all hardware-free suites
+        run: ./scripts/test-all.sh
       # Signing every release with the same certificate lets users keep Dial's Accessibility
       # permission across updates. Without the secrets the release is signed ad hoc.
       - name: Import signing certificate

@@ -2,8 +2,8 @@ import AppKit
 import Security
 import Observation
 
-/// Dial's single permission: Accessibility. It lets Dial catch the brightness and volume keys
-/// and hold back touches while touch is off. Granting it is noticed within a second.
+/// Accessibility lets Dial route brightness, volume and configured keyboard shortcuts.
+/// Granting it is noticed within a second.
 @Observable
 final class Access {
     static let shared = Access()

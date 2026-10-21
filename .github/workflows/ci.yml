@@ -10,7 +10,7 @@ jobs:
     runs-on: macos-26
     steps:
       - uses: actions/checkout@v4
-      - name: Build
-        run: swift build -c release
+      - name: Test all hardware-free suites
+        run: ./scripts/test-all.sh
       - name: Package app
         run: ./scripts/build-app.sh

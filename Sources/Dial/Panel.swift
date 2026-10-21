@@ -3,21 +3,35 @@ import SwiftUI
 
 struct Panel: View {
     let displays: DisplayStore
-    let touch: TouchController
+    var openKeyboard: () -> Void = {}
 
     var body: some View {
-        VStack(spacing: 10) {
+        VStack(spacing: 8) {
             header
             if displays.displays.isEmpty {
                 empty
             } else {
                 ForEach(displays.displays) { DisplayCard(display: $0, all: displays.displays) }
             }
-            // The touch device can outlive the picture on a flaky cable; without a screen the switch means nothing.
-            if touch.available && !displays.displays.isEmpty { TouchCard(touch: touch) }
+            Button(action: openKeyboard) {
+                HStack(spacing: 10) {
+                    Image(systemName: "keyboard").frame(width: 20).foregroundStyle(.secondary)
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text("Keyboard").font(.system(size: 12, weight: .semibold))
+                        Text("Keys & shortcuts").font(.system(size: 10.5)).foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    Image(systemName: "chevron.right").font(.system(size: 10, weight: .semibold)).foregroundStyle(.secondary)
+                }
+                .padding(12)
+                .frame(maxWidth: .infinity)
+                .contentShape(Rectangle())
+                .card()
+            }.buttonStyle(.plain)
+            KeepMacAwakeCard()
             if !Access.shared.granted { KeysSetupCard() }
         }
-        .padding(14)
+        .padding(12)
         .frame(width: 300)
     }
 
@@ -66,8 +80,8 @@ private struct DisplayCard: View {
     let all: [ExternalDisplay]
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 10) {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 8) {
                 Image(systemName: "display")
                     .font(.system(size: 14))
                     .foregroundStyle(.secondary)
@@ -139,34 +153,7 @@ final class LoginItem {
     }
 }
 
-private struct TouchCard: View {
-    let touch: TouchController
-
-    var body: some View {
-        HStack(spacing: 10) {
-            Image(systemName: touch.enabled ? "hand.tap.fill" : "hand.raised.slash.fill")
-                .font(.system(size: 14))
-                .foregroundStyle(touch.enabled ? AnyShapeStyle(.primary) : AnyShapeStyle(.secondary))
-                .contentTransition(.symbolEffect(.replace))
-                .frame(width: 20)
-            VStack(alignment: .leading, spacing: 1) {
-                Text("Touch screen").font(.system(size: 12, weight: .semibold))
-                Text(status).font(.system(size: 11)).foregroundStyle(.secondary)
-            }
-            Spacer()
-            DialSwitch(isOn: touch.enabled, label: "Touch screen") { touch.setEnabled($0) }
-        }
-        .padding(12)
-        .card()
-    }
-
-    private var status: String {
-        if touch.waitingForPermission { return "Turn on Dial in Settings to finish" }
-        return touch.enabled ? "On" : "Off · touches are ignored"
-    }
-}
-
-/// "Looks like" size, tap to open a short scrolling list of sizes; refresh rate as a small pill.
+/// Logical display size, tap to open a short scrolling list of sizes; refresh rate as a small pill.
 private struct ModeRow: View {
     let display: ExternalDisplay
     let all: [ExternalDisplay]
@@ -181,7 +168,7 @@ private struct ModeRow: View {
                 display.showingSizes = open
             } label: {
                 HStack(spacing: 6) {
-                    Text(display.current.map { "Looks like \($0.sizeLabel)" } ?? "–")
+                    Text(display.current.map { $0.sizeLabel } ?? "–")
                         .font(.system(size: 11, weight: .semibold, design: .rounded))
                         .monospacedDigit()
                         .fixedSize()
@@ -335,7 +322,7 @@ struct DialSlider: View {
     let onChange: (Double) -> Void
 
     @GestureState private var dragging = false
-    private let height: CGFloat = 28
+    private let height: CGFloat = 24
 
     var body: some View {
         GeometryReader { geo in
@@ -371,7 +358,7 @@ struct DialSlider: View {
     }
 }
 
-private extension View {
+extension View {
     func card() -> some View {
         background(.primary.opacity(0.045), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
             .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(.primary.opacity(0.06)))

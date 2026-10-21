@@ -58,42 +58,39 @@ final class DDC {
 
 /// Coalesces rapid slider changes so the I2C bus only ever sees the latest value.
 final class DDCWriter {
+    private let commands: MonitorCommandQueue
     private let ddc: DDC
-    private let queue: DispatchQueue
-    private let lock = NSLock()
-    private var pending: [DDC.VCP: UInt16] = [:]
-    private var draining = false
+    private let writeGuard: () -> Bool
 
-    init(ddc: DDC, label: String) {
+    init(ddc: DDC, label: String, writeGuard: @escaping () -> Bool) {
         self.ddc = ddc
-        self.queue = DispatchQueue(label: "dial.ddc.\(label)", qos: .userInitiated)
+        self.writeGuard = writeGuard
+        commands = MonitorCommandQueue(label: "dial.ddc.\(label)") { vcp, value in
+            // Admission in set() is not enough: CG can reuse this display ID while
+            // a slider command waits behind another I2C operation.
+            guard writeGuard(), let control = DDC.VCP(rawValue: vcp) else { return }
+            ddc.write(control, value)
+        }
     }
 
     func set(_ vcp: DDC.VCP, _ value: UInt16) {
-        lock.lock()
-        pending[vcp] = value
-        let start = !draining
-        draining = true
-        lock.unlock()
-        if start { queue.async { self.drain() } }
+        commands.set(vcp.rawValue, value)
     }
 
     func read(_ vcp: DDC.VCP, completion: @escaping ((current: UInt16, max: UInt16)?) -> Void) {
-        queue.async { completion(self.ddc.read(vcp)) }
+        let allowed = writeGuard
+        commands.read({ [ddc] in
+            // A Get VCP sends an I2C request packet too. A queued read must not
+            // address a different monitor after CoreGraphics recycles its ID.
+            guard allowed() else { return nil }
+            return ddc.read(vcp)
+        }, completion: { reply in completion(allowed() ? reply : nil) })
     }
 
-    private func drain() {
-        while true {
-            lock.lock()
-            guard let (vcp, value) = pending.popFirst() else {
-                draining = false
-                lock.unlock()
-                return
-            }
-            lock.unlock()
-            ddc.write(vcp, value)
-        }
+    func stopAndDrain(_ completion: @escaping () -> Void) {
+        commands.stopAndDrain(completion)
     }
+
 }
 
 /// Finds the I2C service behind each external display by walking the IO registry:
