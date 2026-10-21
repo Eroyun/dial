@@ -36,20 +36,27 @@ private func absent(_ path: String) throws -> Bool {
 private func trusted(_ path: String, directory: Bool = false, executable: Bool = false,
                      parent: Bool = false, snapshot: Bool = false) throws {
     let value = try record(path)
-    guard let acl = acl_get_link_np(path, ACL_TYPE_EXTENDED) else { throw Refusal.unsafe }
-    defer { acl_free(UnsafeMutableRawPointer(acl)) }
-    var entry: acl_entry_t?
-    let entries = acl_get_entry(acl, Int32(ACL_FIRST_ENTRY.rawValue), &entry)
+    errno = 0
+    let acl = acl_get_link_np(path, ACL_TYPE_EXTENDED)
+    let hasACL: Bool
+    if let acl {
+        acl_free(UnsafeMutableRawPointer(acl))
+        hasACL = true
+    } else {
+        // Darwin returns ENOENT when the existing inode has no extended ACL.
+        try require(errno == ENOENT)
+        hasACL = false
+    }
     if snapshot {
         try require(AwakeBrokerPolicy.protectedSnapshot(owner: value.st_uid, mode: value.st_mode,
-            links: value.st_nlink, directory: directory, hasACL: entries != 0))
+            links: value.st_nlink, directory: directory, hasACL: hasACL))
         return
     }
     // Executables have the same policy as data except for their three execute bits.
     let mode = executable ? value.st_mode & ~mode_t(0o111) : value.st_mode
     try require(!executable || value.st_mode == 0o100755)
     try require(AwakeBrokerPolicy.trusted(owner: value.st_uid, mode: mode,
-        links: value.st_nlink, directory: directory, hasACL: entries != 0, parent: parent))
+        links: value.st_nlink, directory: directory, hasACL: hasACL, parent: parent))
 }
 
 private func trustedParents() throws {
