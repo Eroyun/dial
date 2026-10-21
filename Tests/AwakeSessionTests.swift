@@ -9,6 +9,7 @@ struct AwakeSessionTests {
         let script = """
         import socket,sys,time
         mode,path=sys.argv[1:3]
+        if mode=='normal': time.sleep(3)
         s=socket.socket(socket.AF_UNIX,socket.SOCK_STREAM); s.connect(path)
         f=s.makefile('rwb',buffering=0)
         def send(v): f.write((v+'\\n').encode())
@@ -17,13 +18,17 @@ struct AwakeSessionTests {
         assert f.readline()==b'start\\n'
         send('active')
         if mode=='eof': sys.exit(0)
+        pings=0
         while True:
             line=f.readline()
-            if line==b'ping\\n': send('pong')
-            elif line==b'stop\\n': send('stopped'); break
+            if line==b'ping\\n': send('pong'); pings+=1
+            elif line==b'stop\\n':
+                assert mode!='normal' or pings>=2
+                send('stopped'); break
             else: break
         """
         for mode in ["normal", "eof", "early", "identity"] {
+            let active = DispatchSemaphore(value: 0)
             let done = DispatchSemaphore(value: 0)
             let mutex = NSLock()
             var events: [String] = []
@@ -37,7 +42,7 @@ struct AwakeSessionTests {
                 }, report: { event in
                     mutex.lock(); defer { mutex.unlock() }
                     switch event {
-                    case .active: events.append("active")
+                    case .active: events.append("active"); active.signal()
                     case .stopped: events.append("stopped"); done.signal()
                     case .cancelled: events.append("cancelled"); done.signal()
                     case .failed: events.append("failed"); done.signal()
@@ -45,6 +50,7 @@ struct AwakeSessionTests {
                 })
             session.start()
             if mode == "normal" {
+                precondition(active.wait(timeout: .now() + 8) == .success, "\(mode) did not activate")
                 // Exercise heartbeats beyond one round trip before requesting stop.
                 Thread.sleep(forTimeInterval: 2.5)
                 session.stop()
