@@ -187,6 +187,8 @@ private func install(snapshot: String) throws {
     var information: CFDictionary?
     try require(SecCodeCopySigningInformation(application, [], &information) == errSecSuccess)
     try require((information as? [String: Any])?[kSecCodeInfoIdentifier as String] as? String == "io.github.eroyun.dial")
+    guard let flags = (information as? [String: Any])?[kSecCodeInfoFlags as String] as? NSNumber else { throw Refusal.unsafe }
+    try require(flags.uint32Value & SecCodeSignatureFlags.adhoc.rawValue == 0)
     let approved = try designated(application)
     let helpers = snapshot + "/Contents/Helpers/"
     let brokerHash = try signingHash(staticCode(helpers + "DialAwakeBroker"))

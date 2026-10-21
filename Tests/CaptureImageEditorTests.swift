@@ -35,7 +35,7 @@ struct CaptureImageEditorTests {
         check(normalized == CGRect(x: 0, y: 0, width: 61, height: 91), "Normalize reversed crop and clamp")
         for invalid in [CGRect.zero, CGRect(x: 200, y: 200, width: 10, height: 10), CGRect(x: CGFloat.nan, y: 0, width: 2, height: 2)] {
             do { _ = try CaptureImageRenderer.render(source: source, crop: invalid); preconditionFailure("Invalid crop accepted") }
-            catch CaptureImageRenderer.RenderError.invalidCrop {} 
+            catch CaptureImageRenderer.RenderError.invalidCrop {}
         }
         let annotation = CaptureImageAnnotation(tool: .box, start: CGPoint(x: 20, y: 30), end: CGPoint(x: 35, y: 40), color: .red, lineWidth: 2)
         let annotated = try CaptureImageRenderer.render(source: source, crop: area, annotations: [annotation])

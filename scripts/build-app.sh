@@ -56,6 +56,10 @@ clang -std=c11 -Wall -Wextra -Werror -O2 -arch arm64 \
 if [ -z "${SIGN_IDENTITY:-}" ] && security find-identity -p codesigning | grep -q '"Dial Developer"'; then
   SIGN_IDENTITY="Dial Developer"
 fi
+if [ "${1:-}" = --dmg ] && { [ -z "${SIGN_IDENTITY:-}" ] || [ "$SIGN_IDENTITY" = - ]; }; then
+  echo "Public releases require a stable signing identity for persistent helper authorization." >&2
+  exit 1
+fi
 swiftc -parse-as-library -swift-version 5 -O -target arm64-apple-macosx14.0 \
   Tools/DialAwakeBroker.swift Sources/Dial/AwakeBrokerProtocol.swift \
   -framework Security -framework SystemConfiguration \

@@ -56,7 +56,7 @@ final class KeepMacAwake {
     private func installHelper() {
         let command: String
         do { command = try Self.installationCommand() }
-        catch { busy = false; message = "Keep-awake helper validation failed."; return }
+        catch { busy = false; message = "Keep-awake setup requires a consistently signed Dial build."; return }
         message = "One-time administrator setup…"
         let script = "do shell script \(AwakeSession.appleScriptQuote(command)) with administrator privileges"
         DispatchQueue.global(qos: .utility).async { [weak self] in
@@ -92,6 +92,8 @@ final class KeepMacAwake {
             var information: CFDictionary?
             guard SecCodeCopySigningInformation(code, [], &information) == errSecSuccess,
                   let values = information as? [String: Any],
+                  let flags = values[kSecCodeInfoFlags as String] as? NSNumber,
+                  flags.uint32Value & SecCodeSignatureFlags.adhoc.rawValue == 0,
                   let data = values[kSecCodeInfoUnique as String] as? Data else { throw InvalidSignature() }
             return data.map { String(format: "%02x", $0) }.joined()
         }

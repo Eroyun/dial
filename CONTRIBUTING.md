@@ -15,6 +15,8 @@ Only the Xcode Command Line Tools are required. SwiftUI's `@State` macro is not 
 
 Without a certificate, rebuilt apps are signed ad hoc and macOS treats each build as a new app, so Dial's Accessibility switch has to be turned on again after every rebuild. To avoid that, make a self-signed code-signing certificate named **Dial Developer** in your login keychain (Keychain Access → Certificate Assistant → Create a Certificate…, type *Code Signing*). `build-app.sh` uses it automatically, and the permission then survives rebuilds.
 
+Keep-awake helper setup and public DMGs require this stable signature. Ad hoc development builds cannot install the persistent helper.
+
 ## Pull requests
 
 - One focused change per PR; CI must pass.
