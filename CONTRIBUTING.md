@@ -1,11 +1,12 @@
 # Contributing
 
-Dial stays small on purpose: brightness, volume, resolution and touch for external displays. Changes that keep it that way are very welcome.
+Dial controls external displays, keyboard shortcuts, screenshots and sleep. Keep changes small and focused.
 
 ## Develop
 
 ```bash
 swift build                    # debug build
+./scripts/test-all.sh           # all hardware-free tests
 .build/debug/Dial --probe      # what Dial sees on your machine
 ./scripts/build-app.sh --install   # build and install to /Applications
 ```
@@ -13,6 +14,8 @@ swift build                    # debug build
 Only the Xcode Command Line Tools are required. SwiftUI's `@State` macro is not available without full Xcode, so app state lives in `@Observable` classes held by plain `let`s.
 
 Without a certificate, rebuilt apps are signed ad hoc and macOS treats each build as a new app, so Dial's Accessibility switch has to be turned on again after every rebuild. To avoid that, make a self-signed code-signing certificate named **Dial Developer** in your login keychain (Keychain Access → Certificate Assistant → Create a Certificate…, type *Code Signing*). `build-app.sh` uses it automatically, and the permission then survives rebuilds.
+
+Keep-awake helper setup and public DMGs require this stable signature. Ad hoc development builds cannot install the persistent helper.
 
 ## Pull requests
 

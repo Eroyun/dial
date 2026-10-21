@@ -4,11 +4,9 @@ import AppKit
 /// without opening the panel. Dial watches for right-clicks that land on its own status bar
 /// window.
 final class RightClickMenu {
-    private let touch: TouchController
     private var monitor: Any?
 
-    init(touch: TouchController) {
-        self.touch = touch
+    init() {
         monitor = NSEvent.addLocalMonitorForEvents(matching: .rightMouseDown) { [weak self] event in
             guard let self, let window = event.window, window.className.contains("NSStatusBarWindow"),
                   let view = window.contentView else { return event }
@@ -17,11 +15,10 @@ final class RightClickMenu {
         }
     }
 
+    deinit { if let monitor { NSEvent.removeMonitor(monitor) } }
+
     private func menu() -> NSMenu {
         let menu = NSMenu()
-        if touch.available {
-            menu.addItem(Item("Touch Screen", on: touch.enabled) { [touch] in touch.setEnabled(!touch.enabled) })
-        }
         if !Access.shared.granted {
             menu.addItem(Item("Set Up Keyboard Keys…") { Access.shared.ask() })
         }

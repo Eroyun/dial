@@ -12,7 +12,7 @@ final class StatusPanel: NSObject, NSWindowDelegate {
     private var closedAt = Date.distantPast
     private var size = CGSize.zero
 
-    init(displays: DisplayStore, touch: TouchController) {
+    init(displays: DisplayStore, openKeyboard: @escaping () -> Void = {}) {
         self.displays = displays
         super.init()
         item.button?.image = NSImage(systemSymbolName: "dial.medium.fill", accessibilityDescription: "Dial")
@@ -26,14 +26,24 @@ final class StatusPanel: NSObject, NSWindowDelegate {
         window.collectionBehavior = [.transient, .ignoresCycle, .fullScreenAuxiliary, .moveToActiveSpace]
         window.delegate = self
         window.onCancel = { [weak self] in self?.close() }
-        let content = Panel(displays: displays, touch: touch)
+        let content = Panel(displays: displays, openKeyboard: openKeyboard)
             .glass(in: RoundedRectangle(cornerRadius: 24, style: .continuous))
             .fixedSize()
             .onGeometryChange(for: CGSize.self) { $0.size } action: { [weak self] in self?.size = $0; self?.place() }
-        let host = NSHostingView(rootView: content)
+        let host = ClearPanelHostingView(rootView: content)
         host.sizingOptions = [] // the panel is sized here, top edge fixed, not by the hosting view
+        host.focusRingType = .none
+        host.wantsLayer = true
+        host.layer?.backgroundColor = NSColor.clear.cgColor
+        host.layer?.cornerRadius = 24
+        host.layer?.cornerCurve = .continuous
+        host.layer?.masksToBounds = true
         window.contentView = host
+        DistributedNotificationCenter.default().addObserver(self, selector: #selector(openRequested), name: Notification.Name("io.github.eroyun.dial.panel.open"), object: nil)
     }
+
+    deinit { DistributedNotificationCenter.default().removeObserver(self) }
+    @objc private func openRequested() { open() }
 
     @objc private func toggle() {
         // The click that closes the panel by taking its focus must not open it again.
@@ -41,6 +51,7 @@ final class StatusPanel: NSObject, NSWindowDelegate {
     }
 
     private func open() {
+        guard !window.isVisible else { return }
         place()
         window.alphaValue = 0
         window.makeKeyAndOrderFront(nil)
@@ -78,6 +89,11 @@ final class StatusPanel: NSObject, NSWindowDelegate {
             close()
         }
     }
+}
+
+/// AppKit must not paint an opaque rectangle behind the rounded SwiftUI glass.
+private final class ClearPanelHostingView<Content: View>: NSHostingView<Content> {
+    override var isOpaque: Bool { false }
 }
 
 /// A borderless panel that takes the keyboard, so Esc and ⌘Q work in it.

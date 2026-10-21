@@ -12,14 +12,16 @@ jobs:
     runs-on: macos-26
     steps:
       - uses: actions/checkout@v4
+      - name: Test all hardware-free suites
+        run: ./scripts/test-all.sh
       # Signing every release with the same certificate lets users keep Dial's Accessibility
-      # permission across updates. Without the secrets the release is signed ad hoc.
+      # permission and helper authorization across updates. Public releases require it.
       - name: Import signing certificate
         env:
           P12: ${{ secrets.DIAL_SIGNING_P12 }}
           P12_PASSWORD: ${{ secrets.DIAL_SIGNING_PASSWORD }}
         run: |
-          if [ -z "$P12" ]; then echo "No certificate; signing ad hoc"; exit 0; fi
+          if [ -z "$P12" ]; then echo "A stable signing certificate is required for releases" >&2; exit 1; fi
           echo "$P12" | base64 --decode > dial.p12
           security create-keychain -p ci build.keychain
           security unlock-keychain -p ci build.keychain
