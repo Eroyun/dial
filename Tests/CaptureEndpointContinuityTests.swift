@@ -30,6 +30,15 @@ import Foundation
         precondition(CaptureEndpointContinuity.stationary(from: still, to: onePixelChanged),
             "Insignificant rendering noise is not page movement")
 
+        var footnoteBytes = still.pixels
+        for y in (still.height - 5)..<(still.height - 3) { for x in 11..<14 {
+            let pixel = (y * still.width + x) * 4
+            for channel in 0..<3 { footnoteBytes[pixel + channel] ^= 255 }
+        } }
+        let footnote = try ScrollCaptureFrame(width: still.width, height: still.height, pixels: footnoteBytes)
+        precondition(!CaptureEndpointContinuity.stationary(from: still, to: footnote),
+            "Sparse new content must not be mistaken for rendering noise")
+
         let unchangedObservation = CaptureEndpointContinuity.observe(from: still, to: still, captureUpward: false)
         precondition(unchangedObservation.movement == nil && unchangedObservation.diagnostic["result"] == "unchanged",
             "A swallowed probe must retain its no-movement reason, without authorizing capture")

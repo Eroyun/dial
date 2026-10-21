@@ -32,15 +32,19 @@ enum CaptureEndpointContinuity {
         return (Movement(rows: rows, verifiedContentRect: rect), diagnostic)
     }
 
-    /// Scan the entire frame through the production moving-content verifier.
-    /// This shares its rendering-noise tolerance, rather than sampling pixels
-    /// or requiring an identical raster. Stationarity alone is not an endpoint
-    /// proof: the caller also requires the measured away-and-return probe.
+    /// Scan every RGB channel while seeking the starting boundary, allowing one
+    /// quantization level of rendering noise. Export uses the stricter stitcher;
+    /// stationarity still requires the measured away-and-return endpoint proof.
     static func stationary(from first: ScrollCaptureFrame,
                            to second: ScrollCaptureFrame) -> Bool {
         guard first.width == second.width, first.height == second.height else { return false }
-        let witness = ScrollingImageStitcher()
-        guard witness.append(first) == .first else { return false }
-        return witness.append(second) == .unchanged
+        for pixel in stride(from: 0, to: first.pixels.count, by: 4) {
+            for channel in 0..<3 {
+                if abs(Int(first.pixels[pixel + channel]) - Int(second.pixels[pixel + channel])) > 1 {
+                    return false
+                }
+            }
+        }
+        return true
     }
 }
