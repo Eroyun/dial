@@ -130,6 +130,7 @@ struct ScrollCapturePreview: View {
     static let preferredSize = NSSize(width: 940, height: 760)
     static let minimumSize = NSSize(width: 560, height: 420)
     let model: ScrollScreenshot
+    init(model: ScrollScreenshot) { self.model = model }
     // Explicit DynamicProperty storage avoids the SDK's newer @State macro,
     // whose plugin is absent from the standalone Command Line Tools toolchain.
     private var zoomState = SwiftUI.State<CapturePreviewZoom>(initialValue: .fitWidth)

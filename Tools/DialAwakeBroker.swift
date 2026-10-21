@@ -8,8 +8,11 @@ private typealias Info = DialAwakeBrokerInfo
 private enum Refusal: Error { case unsafe, incompatible, unavailable }
 private let strict = SecCSFlags(rawValue: kSecCSStrictValidate | kSecCSCheckNestedCode)
 
-private func require(_ condition: @autoclosure () throws -> Bool) throws {
-    if try !condition() { throw Refusal.unsafe }
+private func require(_ condition: @autoclosure () throws -> Bool, line: UInt = #line) throws {
+    if try !condition() {
+        fputs("DialAwakeBroker: validation failed at line \(line)\n", stderr)
+        throw Refusal.unsafe
+    }
 }
 
 private func executablePath() throws -> String {
@@ -18,6 +21,12 @@ private func executablePath() throws -> String {
     var bytes = [CChar](repeating: 0, count: Int(count))
     try require(_NSGetExecutablePath(&bytes, &count) == 0)
     return String(cString: bytes)
+}
+
+private func resolvedPath(_ path: String) throws -> String {
+    guard let resolved = realpath(path, nil) else { throw Refusal.unsafe }
+    defer { free(resolved) }
+    return String(cString: resolved)
 }
 
 private func record(_ path: String) throws -> stat {
@@ -175,7 +184,7 @@ private func install(snapshot: String) throws {
     try require(geteuid() == 0)
     let executable = try executablePath()
     try require(AwakeBrokerPolicy.installerPath(executable,
-        resolved: URL(fileURLWithPath: executable).resolvingSymlinksInPath().path, snapshot: snapshot))
+        resolved: resolvedPath(executable), snapshot: snapshot))
     // The system-tool bootstrap has already pinned both signatures before executing
     // this broker. Consume that private snapshot only; never reopen /Applications.
     for path in ["/private", "/private/var", "/private/var/root"] {
@@ -380,7 +389,7 @@ private struct DialAwakeBroker {
                 try require(CommandLine.arguments.count == 2)
                 guard #available(macOS 13.0, *) else { throw Refusal.unavailable }
                 let path = try executablePath()
-                try require(path == Info.broker && URL(fileURLWithPath: path).resolvingSymlinksInPath().path == path)
+                try require(path == Info.broker && resolvedPath(path) == path)
                 let broker = try Broker(approved: installedRequirement())
                 let listener = NSXPCListener(machServiceName: Info.serviceName)
                 listener.setConnectionCodeSigningRequirement(broker.signingRequirement)
