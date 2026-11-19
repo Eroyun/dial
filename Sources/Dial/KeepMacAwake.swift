@@ -78,6 +78,9 @@ final class KeepMacAwake {
     private static func installationCommand() throws -> String {
         struct InvalidSignature: Error {}
         let strict = SecCSFlags(rawValue: kSecCSStrictValidate | kSecCSCheckNestedCode)
+        // The running process rejects kSecCSCheckNestedCode (-67070, invalid flags), so it is
+        // checked with strict validation only; its bundle and nested helpers get `strict` on disk.
+        let live = SecCSFlags(rawValue: kSecCSStrictValidate)
         var running: SecCode?
         var application: SecStaticCode?
         guard Bundle.main.bundleURL.path == DialAwakeBrokerInfo.application,
@@ -96,7 +99,7 @@ final class KeepMacAwake {
         let applicationHash = try hash(application)
         var pinned: SecRequirement?
         guard SecRequirementCreateWithString("cdhash H\"\(applicationHash)\"" as CFString, [], &pinned) == errSecSuccess,
-              let pinned, SecCodeCheckValidity(running, strict, pinned) == errSecSuccess else { throw InvalidSignature() }
+              let pinned, SecCodeCheckValidity(running, live, pinned) == errSecSuccess else { throw InvalidSignature() }
         var broker: SecStaticCode?
         guard SecStaticCodeCreateWithPath(URL(fileURLWithPath: DialAwakeBrokerInfo.packagedBroker) as CFURL,
                                          [], &broker) == errSecSuccess, let broker,
