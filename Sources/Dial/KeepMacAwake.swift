@@ -2,14 +2,15 @@ import AppKit
 import SwiftUI
 import Security
 
-/// Only the user's switch is saved. Administrator authorization belongs to the
+/// Nothing is saved: every launch starts with the switch off and normal sleep, so
+/// closing Dial always gives sleep back. Administrator authorization belongs to the
 /// root-owned helper installation, never to a saved password or app session.
 @MainActor @Observable
 final class KeepMacAwake {
     static let shared = KeepMacAwake()
     private(set) var active = false
     private(set) var busy = false
-    private(set) var enabled = UserDefaults.standard.bool(forKey: "keepAwakeEnabled")
+    private(set) var enabled = false
     private(set) var message = "Off"
     private var session: AwakeSession?
     private var terminationObserver: NSObjectProtocol?
@@ -18,16 +19,11 @@ final class KeepMacAwake {
         terminationObserver = NotificationCenter.default.addObserver(
             forName: NSApplication.willTerminateNotification, object: nil, queue: .main
         ) { [weak self] _ in MainActor.assumeIsolated { self?.session?.stop() } }
-        DispatchQueue.main.async { [weak self] in
-            guard let self, self.enabled else { return }
-            self.start(allowInstallation: false)
-        }
     }
 
     func setEnabled(_ value: Bool) {
         guard !busy else { return }
         enabled = value
-        UserDefaults.standard.set(value, forKey: "keepAwakeEnabled")
         if value { start(allowInstallation: true) }
         else if let session {
             busy = true

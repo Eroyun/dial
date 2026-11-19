@@ -40,7 +40,8 @@ No account or internet needed.
 
 **Keep Mac awake:** turn on the switch in Dial. macOS asks for administrator
 authorization once to install its sleep helper. Later toggles and app restarts do
-not ask again. Dial remembers the switch and resumes when reopened if it was on.
+not ask again. The switch starts off every time Dial opens, so closing Dial always
+gives sleep back.
 It works on battery with no charger, monitor, or other device connected. The display
 can still turn off. Turn the switch off before carrying the Mac in a bag; it keeps
 using battery with the lid closed. Turning it off or quitting Dial restores normal
