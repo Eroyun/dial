@@ -1,6 +1,7 @@
 import AppKit
 import SwiftUI
 import Security
+import IOKit.pwr_mgt
 
 /// Nothing is saved: every launch starts with the switch off and normal sleep, so
 /// closing Dial always gives sleep back. Administrator authorization belongs to the
@@ -13,6 +14,7 @@ final class KeepMacAwake {
     private(set) var enabled = false
     private(set) var message = "Off"
     private var session: AwakeSession?
+    private var screen = ScreenAwakeAssertion()
     private var terminationObserver: NSObjectProtocol?
 
     init() {
@@ -122,17 +124,40 @@ final class KeepMacAwake {
         switch event {
         case .active:
             active = true; busy = false
-            message = "On • lid-closed sleep disabled"
+            screen.hold()
+            message = screen.held ? "On • no sleep, screen stays on" : "On • sleep disabled, screen may still turn off"
         case .stopped:
-            active = false; busy = false; session = nil
+            active = false; busy = false; session = nil; screen.release()
             message = "Off • normal sleep restored"
         case .cancelled:
-            active = false; busy = false; session = nil
+            active = false; busy = false; session = nil; screen.release()
             message = "Off"
         case .failed(let detail):
-            active = false; busy = false; session = nil
+            active = false; busy = false; session = nil; screen.release()
             message = detail
         }
+    }
+}
+
+/// Keeps the screen on (so macOS never turns it off and locks) while keep-awake is
+/// active. The assertion belongs to Dial's process, so macOS drops it if Dial quits or dies.
+struct ScreenAwakeAssertion {
+    private var id = IOPMAssertionID(0)
+    private(set) var held = false
+
+    mutating func hold() {
+        guard !held else { return }
+        held = IOPMAssertionCreateWithName(kIOPMAssertionTypePreventUserIdleDisplaySleep as CFString,
+                                           IOPMAssertionLevel(kIOPMAssertionLevelOn),
+                                           "Dial: Keep Mac awake" as CFString, &id) == kIOReturnSuccess
+        log("keep-awake screen assertion \(held ? "held" : "failed")")
+    }
+
+    mutating func release() {
+        guard held else { return }
+        IOPMAssertionRelease(id)
+        held = false
+        log("keep-awake screen assertion released")
     }
 }
 
@@ -152,6 +177,6 @@ struct KeepMacAwakeCard: View {
             )).labelsHidden().toggleStyle(.switch).controlSize(.small)
                 .disabled(control.busy)
         }.padding(12).card()
-        .help("Keeps this Mac awake while Dial runs, even with its lid closed and nothing connected. Uses battery. Turn off before carrying in a bag.")
+        .help("Keeps this Mac and its screen awake while Dial runs, so it never sleeps or locks, even with its lid closed and nothing connected. Uses battery. Turn off before carrying in a bag.")
     }
 }

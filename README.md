@@ -42,10 +42,11 @@ No account or internet needed.
 authorization once to install its sleep helper. Later toggles and app restarts do
 not ask again. The switch starts off every time Dial opens, so closing Dial always
 gives sleep back.
-It works on battery with no charger, monitor, or other device connected. The display
-can still turn off. Turn the switch off before carrying the Mac in a bag; it keeps
-using battery with the lid closed. Turning it off or quitting Dial restores normal
-sleep.
+While it is on, nothing sleeps: the Mac, and the screen too, so macOS never turns
+the screen off and asks for your password. It works on battery with no charger,
+monitor, or other device connected. Turn the switch off before carrying the Mac in
+a bag; it keeps using battery with the lid closed. Turning it off or quitting Dial
+restores normal sleep and screen timeouts.
 
 The helper accepts sleep-session requests only from the signed Dial app. It
 watches each session's process and heartbeat, restores sleep after a lost
